@@ -17,7 +17,7 @@ const ReactCurrentDispatcher = {
    * @internal
    * @type {ReactComponent}
    */
-  current: (null: null | Dispatcher),
+  current: (null: null | Dispatcher), // 是何时、如何变成 Dispatcher 的：在 packages/react-reconciler/src/ReactFiberHooks.new.js 的 432行
 };
 
 export default ReactCurrentDispatcher;
