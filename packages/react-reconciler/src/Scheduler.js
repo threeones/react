@@ -22,6 +22,7 @@ export const getCurrentPriorityLevel =
   Scheduler.unstable_getCurrentPriorityLevel;
 export const ImmediatePriority = Scheduler.unstable_ImmediatePriority;
 export const UserBlockingPriority = Scheduler.unstable_UserBlockingPriority;
+/** 调度优先级-普通优先级 */
 export const NormalPriority = Scheduler.unstable_NormalPriority;
 export const LowPriority = Scheduler.unstable_LowPriority;
 export const IdlePriority = Scheduler.unstable_IdlePriority;

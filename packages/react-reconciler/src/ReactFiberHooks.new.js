@@ -89,6 +89,15 @@ import {
 } from './ReactFiberWorkLoop.new';
 
 import getComponentNameFromFiber from 'react-reconciler/src/getComponentNameFromFiber';
+/** 存在Object.is，就直接使用，没有的话，手动实现Object.is
+const objectIs: (x: any, y: any) => boolean = typeof Object.is === 'function' ? Object.is : is;
+
+function is(x: any, y: any) {
+  return (
+    (x === y && (x !== 0 || 1 / x === 1 / y)) || (x !== x && y !== y) 
+  );
+}
+ */
 import is from 'shared/objectIs';
 import isArray from 'shared/isArray';
 import {
@@ -322,6 +331,17 @@ function throwInvalidHookError() {
   );
 }
 
+/**
+ * Hooks 输入值是否相等
+ * 不熟悉 useEffect 的开发只知道 deps 发生改变，则执行对应的 effect 函数，但对 deps 本身的类型并不了解，可能会造就一些莫名其妙的 bug
+ * 1. 当 deps 不存在（undefined/null），则直接返回 null，即 不相等，从而每次都会执行 effect
+ * 2. 当 deps 为 []，返回值为 true，此时只更新链表，不会执行 effect，所以只会执行一次 effect
+ * 3. 当 deps 为对象、数组、函数时，虽然保存了，但在 objectIs 作比较时，旧值与新值永远不相等（[1] !== [1]、{ a: 1 } !== { a: 1 }），所以 deps 发生变动都会触发更新
+ * 如果需要强行比较对象、数组相等时，可以使用 JSON.stringify() 转化为字符串作为 deps，useMemo、useCallback 同理。
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function areHookInputsEqual(
   nextDeps: Array<mixed>,
   prevDeps: Array<mixed> | null,
@@ -1637,7 +1657,13 @@ function rerenderState<S>(
   return rerenderReducer(basicStateReducer, (initialState: any));
 }
 
+/**
+ * 作用：创建一个 effect 对象，形成一个 effect 链表，通过 next 链接，最后绑定在 fiber 的 updateQueue 上
+ * fiber.updateQueue 保存的是所有副作用，包含 useEffect、useLayoutEffect、useInsertionEffect。
+ * 会通过不同的 fiberFlags 给对应的 effect 打上标记，在 updateQueue 链表中的 tag 字段体现，最后在 commit 阶段判断是同步还是异步的 effect
+ */
 function pushEffect(tag, create, destroy, deps) {
+  // 初始化一个 effect 对象
   const effect: Effect = {
     tag,
     create,
@@ -1647,11 +1673,13 @@ function pushEffect(tag, create, destroy, deps) {
     next: (null: any),
   };
   let componentUpdateQueue: null | FunctionComponentUpdateQueue = (currentlyRenderingFiber.updateQueue: any);
+  // 第一个 effect 对象
   if (componentUpdateQueue === null) {
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
     componentUpdateQueue.lastEffect = effect.next = effect;
   } else {
+    // 存放多个 effect 对象
     const lastEffect = componentUpdateQueue.lastEffect;
     if (lastEffect === null) {
       componentUpdateQueue.lastEffect = effect.next = effect;
@@ -1758,11 +1786,24 @@ function updateRef<T>(initialValue: T): {|current: T|} {
   const hook = updateWorkInProgressHook();
   return hook.memoizedState;
 }
-
+/**
+ * useEffect 初始化阶段执行流程
+ * @description 
+ * @param {*} fiberFlags 有副作用的更新标记，用来标记 hook 在 fiber 中的位置
+ * @param {*} hookFlags 副作用标记
+ * @param {*} create 用户传入的回调函数，即 副作用函数
+ * @param {*} deps 用户传递的依赖项
+ * @return {*}
+ * @example  
+ */
 function mountEffectImpl(fiberFlags, hookFlags, create, deps): void {
+  // 初始化一个 hook对象，并与 fiber 建立关系
   const hook = mountWorkInProgressHook();
+  // 判断 deps 如果没有，则为 null
   const nextDeps = deps === undefined ? null : deps;
+  // 给 hook 所在的 fiber 打上副作用的更新标记
   currentlyRenderingFiber.flags |= fiberFlags;
+  // 将副作用的操作存放到 hook.memoizedState 中
   hook.memoizedState = pushEffect(
     HookHasEffect | hookFlags,
     create,
@@ -1771,8 +1812,24 @@ function mountEffectImpl(fiberFlags, hookFlags, create, deps): void {
   );
 }
 
+/**
+ * useEffect 更新阶段执行流程
+ * 1. 判断 deps 是否改变
+ * 2. 如果没有改变则执行 pushEffect 更新副作用链表
+ * 3. 如果改变，则附上不同的标签 fiberFlags，最后在 commit 阶段，通过这些标签来判断是否执行 effect 函数
+ * @description 
+ * @param {*} fiberFlags 有副作用的更新标记，用来标记 hook 在 fiber 中的位置
+ * @param {*} hookFlags 副作用标记
+ * @param {*} create 用户传入的回调函数，即 副作用函数
+ * @param {*} deps 用户传递的依赖项
+ * @return {*}
+ * @example  
+ */
 function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
+
+  // 获取更新的 hooks
   const hook = updateWorkInProgressHook();
+  // 处理 deps
   const nextDeps = deps === undefined ? null : deps;
   let destroy = undefined;
 
@@ -1781,6 +1838,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
     destroy = prevEffect.destroy;
     if (nextDeps !== null) {
       const prevDeps = prevEffect.deps;
+      // 判断依赖是否发生改变，如果没有，只更新副作用链表
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         hook.memoizedState = pushEffect(hookFlags, create, destroy, nextDeps);
         return;
@@ -1788,6 +1846,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
     }
   }
 
+  // 如果依赖发生改变，则在更新链表的时候，打上对应的标签
   currentlyRenderingFiber.flags |= fiberFlags;
 
   hook.memoizedState = pushEffect(
@@ -1798,9 +1857,13 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
   );
 }
 
+/**
+ * useEffect 在初始化节点调用的函数
+ * useEffect(() => {}, [])，其中 () => {} 是 create，[] 是 deps
+ */
 function mountEffect(
-  create: () => (() => void) | void,
-  deps: Array<mixed> | void | null,
+  create: () => (() => void) | void, // 回调函数，即 副作用函数
+  deps: Array<mixed> | void | null, // 依赖项
 ): void {
   if (
     __DEV__ &&
@@ -1823,6 +1886,9 @@ function mountEffect(
   }
 }
 
+/**
+ * useEffect 更新阶段
+ */
 function updateEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,
@@ -2560,7 +2626,7 @@ const HooksDispatcherOnMount: Dispatcher = {
 
   useCallback: mountCallback,
   useContext: readContext,
-  useEffect: mountEffect,
+  useEffect: mountEffect, // useEffect 初始化阶段
   useImperativeHandle: mountImperativeHandle,
   useLayoutEffect: mountLayoutEffect,
   useInsertionEffect: mountInsertionEffect,
@@ -2591,7 +2657,7 @@ const HooksDispatcherOnUpdate: Dispatcher = {
 
   useCallback: updateCallback,
   useContext: readContext,
-  useEffect: updateEffect,
+  useEffect: updateEffect, // useEffect 更新阶段
   useImperativeHandle: updateImperativeHandle,
   useInsertionEffect: updateInsertionEffect,
   useLayoutEffect: updateLayoutEffect,

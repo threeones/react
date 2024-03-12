@@ -1954,15 +1954,21 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
   }
 }
 
+/**
+ * commit 阶段的入口
+ * 首先会制定函数的优先级，当执行完毕后，恢复优先级，函数主体为 commitRootImpl
+ */
 function commitRoot(root: FiberRoot, recoverableErrors: null | Array<mixed>) {
   // TODO: This no longer makes any sense. We already wrap the mutation and
   // layout phases. Should be able to remove.
+  // 获取优先级
   const previousUpdateLanePriority = getCurrentUpdatePriority();
   const prevTransition = ReactCurrentBatchConfig.transition;
 
   try {
     ReactCurrentBatchConfig.transition = null;
     setCurrentUpdatePriority(DiscreteEventPriority);
+    // commit 函数主体
     commitRootImpl(root, recoverableErrors, previousUpdateLanePriority);
   } finally {
     ReactCurrentBatchConfig.transition = prevTransition;
@@ -1972,6 +1978,10 @@ function commitRoot(root: FiberRoot, recoverableErrors: null | Array<mixed>) {
   return null;
 }
 
+/**
+ * commit 函数主体
+ * 只需要关注 effect 的逻辑即可，主要是 scheduleCallback
+ */
 function commitRootImpl(
   root: FiberRoot,
   recoverableErrors: null | Array<mixed>,
@@ -2070,7 +2080,10 @@ function commitRootImpl(
     if (!rootDoesHavePassiveEffects) {
       rootDoesHavePassiveEffects = true;
       pendingPassiveEffectsRemainingLanes = remainingLanes;
+      // effect 的主要逻辑，关注这里
+      // NormalSchedulerPriority：effectlist 是普通优先级
       scheduleCallback(NormalSchedulerPriority, () => {
+        // 调度 Effect
         flushPassiveEffects();
         // This render triggered passive effects: release the root cache pool
         // *after* passive effects fire to avoid freeing a cache pool that may
@@ -2374,7 +2387,9 @@ export function flushPassiveEffects(): boolean {
 
     try {
       ReactCurrentBatchConfig.transition = null;
+      // 设置优先级
       setCurrentUpdatePriority(priority);
+      // 调用函数
       return flushPassiveEffectsImpl();
     } finally {
       setCurrentUpdatePriority(previousPriority);
@@ -2402,6 +2417,12 @@ export function enqueuePendingPassiveProfilerEffect(fiber: Fiber): void {
   }
 }
 
+/**
+ * 最终执行：所有 effect 的销毁程序 commitPassiveUnmountEffects 和回调函数 commitPassiveMountEffects
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function flushPassiveEffectsImpl() {
   if (rootWithPendingPassiveEffects === null) {
     return false;
@@ -2432,7 +2453,9 @@ function flushPassiveEffectsImpl() {
   const prevExecutionContext = executionContext;
   executionContext |= CommitContext;
 
+  // 执行所有 effect 的销毁程序
   commitPassiveUnmountEffects(root.current);
+  // 执行所有 effect 的回调函数
   commitPassiveMountEffects(root, root.current);
 
   // TODO: Move to commitPassiveMountEffects
@@ -3022,6 +3045,14 @@ export function restorePendingUpdaters(root: FiberRoot, lanes: Lanes): void {
 }
 
 const fakeActCallbackNode = {};
+/**
+ * scheduleCallback 是 React 调度器（Scheduler）的一个 API，最终通过一个宏任务来异步调度传入的回调函数，使得该回调在下一轮事件循环中执行，此时浏览器已经绘制过一次
+ * @description 
+ * @param {*} priorityLevel 调度优先级
+ * @param {*} callback 回调函数
+ * @return {*}
+ * @example  
+ */
 function scheduleCallback(priorityLevel, callback) {
   if (__DEV__) {
     // If we're currently inside an `act` scope, bypass Scheduler and push to

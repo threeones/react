@@ -512,6 +512,12 @@ function commitBeforeMutationEffectsDeletion(deletion: Fiber) {
   }
 }
 
+/**
+ * 需要注意，effect 的执行需要保证所有组件的 effect 的销毁函数执行完才能执行：因为多个组件可能共用一个 ref，如果不将销毁函数执行，改变 ref 的值，有可能会影响其他 effect。
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function commitHookEffectListUnmount(
   flags: HookFlags,
   finishedWork: Fiber,
@@ -536,6 +542,7 @@ function commitHookEffectListUnmount(
             }
           }
 
+          // 调用销毁逻辑（useEffect 中末尾的 return）
           safelyCallDestroy(finishedWork, nearestMountedAncestor, destroy);
 
           if (enableSchedulingProfiler) {
@@ -552,6 +559,14 @@ function commitHookEffectListUnmount(
   }
 }
 
+/**
+ * 主要作用：遍历所有的 effect list，然后依次执行对应的 effect 函数，并将结果（即 useEffect 最后的 return 函数，也就是销毁时需要执行的函数）保留在 destory 函数中
+ * @description 
+ * @param {*} flags
+ * @param {*} finishedWork
+ * @return {*}
+ * @example  
+ */
 function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
   const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null;
@@ -569,6 +584,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
         }
 
         // Mount
+        // 执行 effect 函数，并保存 effect 函数的结果给 destroy
         const create = effect.create;
         effect.destroy = create();
 
@@ -2615,6 +2631,13 @@ function reappearLayoutEffects_complete(subtreeRoot: Fiber) {
   }
 }
 
+/**
+ * 执行 effect 的回调函数
+ * 流向：commitPassiveMountEffects > commitPassiveMountOnFiber > commitHookPassiveMountEffects > commitHookEffectListMount
+ * @description 
+ * @return {*}
+ * @example  
+ */
 export function commitPassiveMountEffects(
   root: FiberRoot,
   finishedWork: Fiber,
@@ -2772,6 +2795,14 @@ function commitPassiveMountOnFiber(
   }
 }
 
+/**
+ * 执行 effect 的销毁程序
+ * 流向：commitPassiveUnmountEffects > commitPassiveUnmountOnFiber > commitHookEffectListUnmount
+ * @description 
+ * @param {*} firstChild
+ * @return {*}
+ * @example  
+ */
 export function commitPassiveUnmountEffects(firstChild: Fiber): void {
   nextEffect = firstChild;
   commitPassiveUnmountEffects_begin();
