@@ -3771,6 +3771,10 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
   return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
 }
 
+/**
+ * 当普通的 JSX 代码被 babel 编译成 React.createElement 的形式后，最终都会走到 beginWork
+ * 可以说是 React 整个流程的开始
+ */
 function beginWork(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -3866,6 +3870,8 @@ function beginWork(
   // move this assignment out of the common path and into each branch.
   workInProgress.lanes = NoLanes;
 
+  // 判断 element 对应的 fiber
+  // Fiber 保存了什么，见 packages/react-reconciler/src/ReactFiber.new.js 中的 FiberNode
   switch (workInProgress.tag) {
     case IndeterminateComponent: {
       return mountIndeterminateComponent(

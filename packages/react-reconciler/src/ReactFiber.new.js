@@ -120,10 +120,10 @@ if (__DEV__) {
 }
 
 function FiberNode(
-  tag: WorkTag,
-  pendingProps: mixed,
-  key: null | string,
-  mode: TypeOfMode,
+  tag: WorkTag, // 组件的类型，判断函数式组件、类组件（packages/react-reconciler/src/ReactWorkTags.js）
+  pendingProps: mixed, // 
+  key: null | string, // 
+  mode: TypeOfMode, // 
 ) {
   // Instance
   this.tag = tag;
