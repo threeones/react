@@ -32,7 +32,7 @@ import {
 import ReactStrictModeWarnings from './ReactStrictModeWarnings.new';
 import {isMounted} from './ReactFiberTreeReflection';
 import {get as getInstance, set as setInstance} from 'shared/ReactInstanceMap';
-import shallowEqual from 'shared/shallowEqual';
+import shallowEqual from 'shared/shallowEqual'; // 见 packages/shared/shallowEqual.js
 import getComponentNameFromFiber from 'react-reconciler/src/getComponentNameFromFiber';
 import getComponentNameFromType from 'shared/getComponentNameFromType';
 import assign from 'shared/assign';
@@ -305,6 +305,12 @@ const classComponentUpdater = {
   },
 };
 
+/**
+ * 检查是否更新
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function checkShouldComponentUpdate(
   workInProgress,
   ctor,
@@ -316,6 +322,7 @@ function checkShouldComponentUpdate(
 ) {
   const instance = workInProgress.stateNode;
   if (typeof instance.shouldComponentUpdate === 'function') {
+    // shouldComponentUpdate 更新
     let shouldUpdate = instance.shouldComponentUpdate(
       newProps,
       newState,
@@ -350,8 +357,16 @@ function checkShouldComponentUpdate(
     return shouldUpdate;
   }
 
+  /**
+   * 判断原型链中是否存在 isPureReactComponent
+   * PureComponent 组建的原型链中包含 isPureReactComponent 属性，通过这个属性判断是否进行浅比较
+   * 浅比较流程，见 packages/shared/shallowEqual.js
+   * PureComponent 通过自带的 props/state 的浅比较实现了 shouldComponentUpdate()，这是普通的 Component 所不具备的
+   * 可能因为深层的数据（引用数据）不一致而产生错误的否定判断（不更新），导致 shouldComponentUpdate 返回 false，界面不更新，要谨慎使用
+   */  
   if (ctor.prototype && ctor.prototype.isPureReactComponent) {
     return (
+      // 见 packages/shared/shallowEqual.js
       !shallowEqual(oldProps, newProps) || !shallowEqual(oldState, newState)
     );
   }

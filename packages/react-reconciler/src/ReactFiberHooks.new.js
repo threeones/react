@@ -98,7 +98,7 @@ function is(x: any, y: any) {
   );
 }
  */
-import is from 'shared/objectIs';
+import is from 'shared/objectIs'; // 见 packages/shared/objectIs.js
 import isArray from 'shared/isArray';
 import {
   markWorkInProgressReceivedUpdate,
@@ -677,7 +677,7 @@ export function resetHooksAfterThrow(): void {
 
 /**
  * 所有的 hooks 都会走这个函数，只是不同的 Hooks 保存不同的信息
- * 作用尤为重要，它将 Hooks 与 Fiber 联系起来
+ * 作用尤为重要，它将 Hooks 与 Fiber 联系起来（将 hook 放入 fiber.memoizedState）
  * 每执行一个 Hooks 函数就会生成一个 hook 对象，然后将每个 hook 以链表的方式串联起来
  */
 function mountWorkInProgressHook(): Hook {
@@ -1710,6 +1710,16 @@ function getCallerStackFrame(): string {
     : stackFrames.slice(2, 3).join('\n');
 }
 
+/**
+ * uesRef 的初始化处理阶段，和 createRef() 相似，见 packages/react/src/ReactCreateRef.js
+ * 创建了一个对象，对象上的 current 属性，用来保存通过 ref 属性获取的 DOM 元素、组件实例、数据等，以便后续使用
+ * 保存的数据通过 memoizedState 维护
+ * 为了解决 createRef() 在函数组件内每次刷新导致初始化赋值的问题，诞生了 useRef。
+ * useRef 通过与 fiber 建立关联，将 userRef 创建的 ref 挂载到 Fiber 上，只要组件不被销毁，对应 Fiber 上的 ref 对象就一直存在，那么无论函数组件重新执行，都能拿到对应的 ref 值，这就是函数组件能拥有自己状态的根本原因
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountRef<T>(initialValue: T): {|current: T|} {
   const hook = mountWorkInProgressHook();
   if (enableUseRefAccessWarning) {
@@ -1782,10 +1792,17 @@ function mountRef<T>(initialValue: T): {|current: T|} {
   }
 }
 
+/**
+ * uesRef 的更新处理阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateRef<T>(initialValue: T): {|current: T|} {
   const hook = updateWorkInProgressHook();
   return hook.memoizedState;
 }
+
 /**
  * useEffect 初始化阶段执行流程
  * @description 
@@ -2038,20 +2055,40 @@ function mountDebugValue<T>(value: T, formatterFn: ?(value: T) => mixed): void {
 
 const updateDebugValue = mountDebugValue;
 
+/**
+ * useCallback 初始化阶段，和 mountMemo 类似：创建一个 hooks，然后判断 deps 类型，直接将 callback 和 deps 存入到 memoizedState 里
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountCallback<T>(callback: T, deps: Array<mixed> | void | null): T {
+  // 初始化一个 hook 对象，并与 fiber 建立关系
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
   hook.memoizedState = [callback, nextDeps];
   return callback;
 }
 
+/**
+ * useCallback 更新阶段，和 updateMemo 类似：通过 areHookInputsEqual 判断新旧的 deps 是否改变，如果改变则将 callback 和 deps 存入到 memoizedState 里；如果没改变，直接返回缓存的值 prevState
+ * useCall 比 useMemo 多了一步 nextCreate()，说明 useCallback(fn, deps) 等价于 useMemo(() => fn, deps)
+ * @description 
+ * @param {*} nextCreate 
+ * @param {*} deps 
+ * @return {*}
+ * @example  
+ */
 function updateCallback<T>(callback: T, deps: Array<mixed> | void | null): T {
+  // 初始化一个 hook 对象，并与 fiber 建立联系
   const hook = updateWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
+  // 判断新值
   const prevState = hook.memoizedState;
   if (prevState !== null) {
     if (nextDeps !== null) {
+      // 之前保存的值
       const prevDeps: Array<mixed> | null = prevState[1];
+      // 与 useEffect 一样，判断 deps 是否一致，见 updateEffectImpl
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         return prevState[0];
       }
@@ -2061,10 +2098,17 @@ function updateCallback<T>(callback: T, deps: Array<mixed> | void | null): T {
   return callback;
 }
 
+/**
+ * useMemo 初始化阶段：创建一个 hook，然后判断 deps 类型，执行 nextCreate（需要缓存的值），将值与 deps 保存到 hook.memoizedState
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
 ): T {
+  // 初始化一个 hook对象，并与 fiber 建立关系
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
   const nextValue = nextCreate();
@@ -2072,17 +2116,29 @@ function mountMemo<T>(
   return nextValue;
 }
 
+/**
+ * useMemo 更新阶段：只做了一件事，即 通过判断两次的 deps 是否改变，如果改变，则重新执行 nextCreate()，将得到的新值复制给 hook.memoizedState；如果没改变，则直接返回缓存的值 prevState
+ * @description 
+ * @param {*} nextCreate 如果引用了 useState 等信息，无法被垃圾机制回收（闭包问题），访问的属性可能不是最新的，所以需要将引用的 useState 的值传递给 deps，这样就会触发 nextCreate() 更新值
+ * @param {*} deps 
+ * @return {*}
+ * @example  
+ */
 function updateMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
 ): T {
+  // 初始化一个 hook 对象，并与 fiber 建立联系
   const hook = updateWorkInProgressHook();
+  // 判断新值
   const nextDeps = deps === undefined ? null : deps;
   const prevState = hook.memoizedState;
   if (prevState !== null) {
     // Assume these are defined. If they're not, areHookInputsEqual will warn.
     if (nextDeps !== null) {
+      // 之前保存的值
       const prevDeps: Array<mixed> | null = prevState[1];
+      // 与 useEffect 一样，判断 deps 是否一致，见 updateEffectImpl
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         return prevState[0];
       }
@@ -2600,7 +2656,7 @@ export const ContextOnlyDispatcher: Dispatcher = {
   useLayoutEffect: throwInvalidHookError,
   useMemo: throwInvalidHookError,
   useReducer: throwInvalidHookError,
-  useRef: throwInvalidHookError,
+  useRef: throwInvalidHookError, // useRef 的异常处理阶段
   useState: throwInvalidHookError, // useState 的异常处理阶段
   useDebugValue: throwInvalidHookError,
   useDeferredValue: throwInvalidHookError,
@@ -2624,15 +2680,15 @@ if (enableCache) {
 const HooksDispatcherOnMount: Dispatcher = {
   readContext,
 
-  useCallback: mountCallback,
+  useCallback: mountCallback, // useCallback 初始化阶段
   useContext: readContext,
   useEffect: mountEffect, // useEffect 初始化阶段
   useImperativeHandle: mountImperativeHandle,
   useLayoutEffect: mountLayoutEffect,
   useInsertionEffect: mountInsertionEffect,
-  useMemo: mountMemo,
+  useMemo: mountMemo, // useMemo 初始化阶段
   useReducer: mountReducer,
-  useRef: mountRef,
+  useRef: mountRef, // uesRef 的初始化处理阶段
   useState: mountState, // 初始化阶段对应的 useState 所走的时 mountState
   useDebugValue: mountDebugValue,
   useDeferredValue: mountDeferredValue,
@@ -2655,15 +2711,15 @@ if (enableCache) {
 const HooksDispatcherOnUpdate: Dispatcher = {
   readContext,
 
-  useCallback: updateCallback,
+  useCallback: updateCallback, // useCallback 更新阶段
   useContext: readContext,
   useEffect: updateEffect, // useEffect 更新阶段
   useImperativeHandle: updateImperativeHandle,
   useInsertionEffect: updateInsertionEffect,
   useLayoutEffect: updateLayoutEffect,
-  useMemo: updateMemo,
+  useMemo: updateMemo, // useMemo 更新阶段
   useReducer: updateReducer,
-  useRef: updateRef,
+  useRef: updateRef, // useRef 的更新阶段
   useState: updateState, // 初始化阶段对应的 useState 所走的时 updateState
   useDebugValue: updateDebugValue,
   useDeferredValue: updateDeferredValue,

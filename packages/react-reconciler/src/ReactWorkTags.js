@@ -45,7 +45,7 @@ export const IndeterminateComponent = 2; // Before we know whether it is functio
 export const HostRoot = 3; // Root of a host tree. Could be nested inside another node.
 /** ReactDOM.createPortal 产生的 Portal */
 export const HostPortal = 4; // A subtree. Could be an entry point to a different renderer.
-/** dom 元素，如 <div> */
+/** dom 元素/原生元素，如 <div> */
 export const HostComponent = 5;
 /** 文本节点，如 <span>这是文本内容</span> 中的 这是文本内容（不包含 <span>） */
 export const HostText = 6;
