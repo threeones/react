@@ -188,6 +188,7 @@ function coerceRef(
       ) {
         return current.ref;
       }
+      // 统一处理 ref：当 ref 是字符串，走函数的方式
       const ref = function(value) {
         let refs = resolvedInst.refs;
         if (refs === emptyRefsObject) {

@@ -2126,6 +2126,7 @@ function commitRootImpl(
     // The first phase a "before mutation" phase. We use this phase to read the
     // state of the host tree right before we mutate it. This is where
     // getSnapshotBeforeUpdate is called.
+    // BeforeMutation 阶段：深度优先遍历找到最后一个带有标识的 Fiber 作为起点，然后调用一个实例 instance 的 getSnapshotBeforeUpdate 方法并生成快照对象，之后会作为 componentDidUpdate 的第三个参数，这里主要针对 Class 组件的操作，其他类型的组件暂不处理
     const shouldFireAfterActiveInstanceBlur = commitBeforeMutationEffects(
       root,
       finishedWork,
@@ -2144,6 +2145,8 @@ function commitRootImpl(
     }
 
     // The next phase is the mutation phase, where we mutate the host tree.
+    // Mutation 阶段：核心阶段-真正进行更新 DOM 树的阶段，真正处理 Class 组件、函数式组件以及原生组件的地方，同时也是增删改的处理阶段
+    // 在更新的过程中，首先在 commit 的 Mutation 阶段，将 ref 重置为 null，这些最终在 safelyDetachRef 中处理
     commitMutationEffects(root, finishedWork, lanes);
 
     if (enableCreateEventHandleAPI) {
@@ -2170,6 +2173,8 @@ function commitRootImpl(
     if (enableSchedulingProfiler) {
       markLayoutEffectsStarted(lanes);
     }
+    // Layout 阶段：深度优先遍历找到最后一个带有标识的 Fiber 作为起点，根据不同的组件处理不同逻辑，比如 函数式组件处理 useLayoutEffect 的回调函数。
+    // 这之后就会更新 ref，最终处理 useEffect，也就是 useEffect 的 Scheduler（异步调度器）。
     commitLayoutEffects(finishedWork, root, lanes);
     if (__DEV__) {
       if (enableDebugTracing) {

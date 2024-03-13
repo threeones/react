@@ -966,11 +966,21 @@ function updateProfiler(
   return workInProgress.child;
 }
 
+/**
+ * markRef 标记操作
+ * Ref 的更新是有条件的，并不是每次 Fiber 更新都会让 ref 更新，只有具备 Ref tag 的时候才会更新，而 Ref tag 是通过 markRef 打上的。
+ * 在 Class 组件或原生组件的更新过程中调用，分为两种情况：初始化，更新中发生变化。
+ * @description 
+ * @param {*} current
+ * @param {*} workInProgress
+ * @return {*}
+ * @example  
+ */
 function markRef(current: Fiber | null, workInProgress: Fiber) {
   const ref = workInProgress.ref;
   if (
-    (current === null && ref !== null) ||
-    (current !== null && current.ref !== ref)
+    (current === null && ref !== null) || // 初始化
+    (current !== null && current.ref !== ref) // 更新时
   ) {
     // Schedule a Ref effect
     workInProgress.flags |= Ref;

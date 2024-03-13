@@ -256,6 +256,7 @@ function safelyCallComponentDidMount(
 }
 
 // Capture errors so they don't interrupt mounting.
+// 当具备更新条件后走到这里，主体是 commitAttachRef 函数
 function safelyAttachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
   try {
     commitAttachRef(current);
@@ -265,6 +266,17 @@ function safelyAttachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
   }
 }
 
+/**
+ * 置空/卸载操作
+ * （ref？）在更新的过程中，首先在 commit 的 Mutation 阶段，将 ref 重置为 null，这些最终在 safelyDetachRef 中处理。
+ * 当 ref 是字符串，走函数的方式，见 packages/react-reconciler/src/ReactChildFiber.new.js 中的 192行
+ * v16 置空操作在 commitDetachRef 中。
+ * @description 
+ * @param {*} current
+ * @param {*} nearestMountedAncestor
+ * @return {*}
+ * @example  
+ */
 function safelyDetachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
   const ref = current.ref;
   if (ref !== null) {
@@ -299,6 +311,7 @@ function safelyDetachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
         }
       }
     } else {
+      // ref 置空
       ref.current = null;
     }
   }
@@ -1024,6 +1037,7 @@ function commitLayoutEffectOnFiber(
         commitAttachRef(finishedWork);
       }
     } else {
+      // 更新条件
       if (finishedWork.flags & Ref) {
         commitAttachRef(finishedWork);
       }
@@ -1137,16 +1151,25 @@ function hideOrUnhideAllChildren(finishedWork, isHidden) {
   }
 }
 
+/**
+ * 更新操作
+ * Ref 的更新会在 Layout 阶段，在更新真实元素节点后，会进行有关 Ref 的更新
+ * 主要通过 tag 判断是类组件还是原生组件，Class 组件直接使用实例 instance
+ * @description 
+ * @param {*} finishedWork
+ * @return {*}
+ * @example  
+ */
 function commitAttachRef(finishedWork: Fiber) {
   const ref = finishedWork.ref;
   if (ref !== null) {
     const instance = finishedWork.stateNode;
     let instanceToUse;
     switch (finishedWork.tag) {
-      case HostComponent:
+      case HostComponent: // 原生元素
         instanceToUse = getPublicInstance(instance);
         break;
-      default:
+      default: // 类组件
         instanceToUse = instance;
     }
     // Moved outside to ensure DCE works with this flag
@@ -2145,6 +2168,14 @@ function commitResetTextContent(current: Fiber) {
   resetTextContent(current.stateNode);
 }
 
+/**
+ * ref 的 commit 的 Mutation 阶段：核心阶段-真正进行更新 DOM 树的阶段
+ * 在更新的过程中，首先在 commit 的 Mutation 阶段，将 ref 重置为 null，这些最终在 safelyDetachRef 中处理
+ * commitMutationEffects > commitMutationEffects_begin > commitMutationEffects_complete > commitMutationEffectsOnFiber > disappearLayoutEffects_begin > safelyDetachRef
+ * @description 
+ * @return {*}
+ * @example  
+ */
 export function commitMutationEffects(
   root: FiberRoot,
   firstChild: Fiber,
