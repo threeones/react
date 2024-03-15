@@ -788,6 +788,12 @@ function updateWorkInProgressHook(): Hook {
   return workInProgressHook;
 }
 
+/**
+ * 创建一个更新队列
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function createFunctionComponentUpdateQueue(): FunctionComponentUpdateQueue {
   return {
     lastEffect: null,
@@ -1367,15 +1373,28 @@ function updateMutableSource<Source, Snapshot>(
   return useMutableSource(hook, source, getSnapshot, subscribe);
 }
 
+/**
+ * useSyncExternalStore 初始化阶段
+ * @description 源码实现见 packages/use-sync-external-store/src/useSyncExternalStoreShimClient.js
+ * 三道保险：
+ * 1. 通过 dispatch 修改 store 时会触发 subscribe，强制使用 Sync 同步，期间不可中断渲染
+ * 2. 在并发模式下，协调结束后进行一致性检查，如果不同，则强制使用 Sync 同步
+ * 3. 在 commit 阶段再进行一致性检查，同上
+ * @return {*}
+ * @example  
+ */
 function mountSyncExternalStore<T>(
-  subscribe: (() => void) => () => void,
-  getSnapshot: () => T,
-  getServerSnapshot?: () => T,
+  subscribe: (() => void) => () => void, // 订阅函数，用于注册一个回调函数，当存储值发生更改时被调用
+  getSnapshot: () => T, // 返回当前存储值的函数
+  getServerSnapshot?: () => T, // 返回服务端（hydration 模式下）渲染期间使用的存储值的函数
 ): T {
+  // 拿到对应的 fiber 节点
   const fiber = currentlyRenderingFiber;
+  // 创建 hook 对象
   const hook = mountWorkInProgressHook();
 
   let nextSnapshot;
+  // 是否处于 hydrate 模式（即 服务端渲染）
   const isHydrating = getIsHydrating();
   if (isHydrating) {
     if (getServerSnapshot === undefined) {
@@ -1384,6 +1403,7 @@ function mountSyncExternalStore<T>(
           'server-rendered content. Will revert to client rendering.',
       );
     }
+    // hydrate 模式下，生成 store 的快照，获取当前的 store 的状态值
     nextSnapshot = getServerSnapshot();
     if (__DEV__) {
       if (!didWarnUncachedGetSnapshot) {
@@ -1396,6 +1416,7 @@ function mountSyncExternalStore<T>(
       }
     }
   } else {
+    // 生成 store 的快照，获取当前的 store 的状态值
     nextSnapshot = getSnapshot();
     if (__DEV__) {
       if (!didWarnUncachedGetSnapshot) {
@@ -1423,7 +1444,9 @@ function mountSyncExternalStore<T>(
       );
     }
 
+    // 并发模式下，一致性检查
     if (!includesBlockingLane(root, renderLanes)) {
+      // 核心
       pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
     }
   }
@@ -1431,6 +1454,7 @@ function mountSyncExternalStore<T>(
   // Read the current snapshot from the store on every render. This breaks the
   // normal rules of React, and only works because store updates are
   // always synchronous.
+  // 将 store 的状态值存储到对应的 memoizedState
   hook.memoizedState = nextSnapshot;
   const inst: StoreInstance<T> = {
     value: nextSnapshot,
@@ -1439,6 +1463,9 @@ function mountSyncExternalStore<T>(
   hook.queue = inst;
 
   // Schedule an effect to subscribe to the store.
+  // useEffect 中的 mountEffect
+  // mountEffect 和 pushEffect，与 useEffect 的初始化步骤对应：打上标记，在 commit 阶段进行一致性检查，防止 store 的状态不一致
+  // 核心
   mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [subscribe]);
 
   // Schedule an effect to update the mutable instance fields. We will update
@@ -1449,8 +1476,10 @@ function mountSyncExternalStore<T>(
   // TODO: We can move this to the passive phase once we add a pre-commit
   // consistency check. See the next comment.
   fiber.flags |= PassiveEffect;
+  // 打上对应的标记，与 useEffect 中一样
   pushEffect(
     HookHasEffect | HookPassive,
+    // 核心
     updateStoreInstance.bind(null, fiber, inst, nextSnapshot, getSnapshot),
     undefined,
     null,
@@ -1459,16 +1488,24 @@ function mountSyncExternalStore<T>(
   return nextSnapshot;
 }
 
+/**
+ * useSyncExternalStore 更新阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateSyncExternalStore<T>(
   subscribe: (() => void) => () => void,
   getSnapshot: () => T,
   getServerSnapshot?: () => T,
 ): T {
   const fiber = currentlyRenderingFiber;
+  // 获取更新的 hooks
   const hook = updateWorkInProgressHook();
   // Read the current snapshot from the store on every render. This breaks the
   // normal rules of React, and only works because store updates are
   // always synchronous.
+  // 获取最新的 store 状态
   const nextSnapshot = getSnapshot();
   if (__DEV__) {
     if (!didWarnUncachedGetSnapshot) {
@@ -1484,14 +1521,19 @@ function updateSyncExternalStore<T>(
   const prevSnapshot = hook.memoizedState;
   const snapshotChanged = !is(prevSnapshot, nextSnapshot);
   if (snapshotChanged) {
+    // 存储到 memoizedState 中
     hook.memoizedState = nextSnapshot;
     markWorkInProgressReceivedUpdate();
   }
   const inst = hook.queue;
 
+  // 通过 updateEffect 在节点更新后执行对应的 subscribe 方法
+  // 与 useEffect 对应，只不过这里不是检查 deps，而是检查 subscribe，即 subscribe 不改变则不会执行
   updateEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [
     subscribe,
   ]);
+
+  // 接下来和 mountSyncExternalStore 一致，在 render 阶段结束时，commit 阶段会分别对 store 进行一致性检查，防止 store 的状态不一致
 
   // Whenever getSnapshot or subscribe changes, we need to check in the
   // commit phase if there was an interleaved mutation. In concurrent mode
@@ -1532,6 +1574,12 @@ function updateSyncExternalStore<T>(
   return nextSnapshot;
 }
 
+/**
+ * 检查一致性，如果是并发模式，会创建一个 check 对象，并添加到 fiber 中的 updateQueue 的 store 数组中
+ * @description 收集 check 的过程和 useEffect 对象类似，createFunctionComponentUpdateQueue 用来创建一个更新队列，最终放到 stores 数组中
+ * @return {*}
+ * @example pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
+ */
 function pushStoreConsistencyCheck<T>(
   fiber: Fiber,
   getSnapshot: () => T,
@@ -1543,11 +1591,11 @@ function pushStoreConsistencyCheck<T>(
     value: renderedSnapshot,
   };
   let componentUpdateQueue: null | FunctionComponentUpdateQueue = (currentlyRenderingFiber.updateQueue: any);
-  if (componentUpdateQueue === null) {
+  if (componentUpdateQueue === null) { // 第一个 check 对象
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
     componentUpdateQueue.stores = [check];
-  } else {
+  } else { // 多个 check 对象
     const stores = componentUpdateQueue.stores;
     if (stores === null) {
       componentUpdateQueue.stores = [check];
@@ -1557,6 +1605,12 @@ function pushStoreConsistencyCheck<T>(
   }
 }
 
+/**
+ * 在 commit 阶段，统一处理 fiber 阶段的所有 effect，此时再检查 store 是否发生变化，防止 store 的状态不一致
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateStoreInstance<T>(
   fiber: Fiber,
   inst: StoreInstance<T>,
@@ -1571,13 +1625,25 @@ function updateStoreInstance<T>(
   // have been in an event that fired before the passive effects, or it could
   // have been in a layout effect. In that case, we would have used the old
   // snapsho and getSnapshot values to bail out. We need to check one more time.
+  // 在 commit 阶段检查 store 是否发生变化
   if (checkIfSnapshotChanged(inst)) {
     // Force a re-render.
+    // 如果不一致，触发同步阻塞渲染
     forceStoreRerender(fiber);
   }
 }
 
+/**
+ * 通过 store 提供的 subscribe 方法订阅对应的状态变化，如果发生变化，则会采用同步阻塞模式渲染
+ * @description 
+ * @param {*} fiber
+ * @param {*} inst
+ * @param {*} subscribe
+ * @return {*}
+ * @example mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [subscribe]);
+ */
 function subscribeToStore(fiber, inst, subscribe) {
+  // 通过 store 的 dispatch 方法修改 store 会触发 handleStoreChange
   const handleStoreChange = () => {
     // The store changed. Check if the snapshot changed since the last time we
     // read from the store.
@@ -1590,17 +1656,34 @@ function subscribeToStore(fiber, inst, subscribe) {
   return subscribe(handleStoreChange);
 }
 
+/**
+ * 判断 store 的值是否发生变化
+ * @description 
+ * @param {*} inst
+ * @return {*}
+ * @example  
+ */
 function checkIfSnapshotChanged(inst) {
   const latestGetSnapshot = inst.getSnapshot;
+  // 旧值
   const prevValue = inst.value;
   try {
+    // 新值
     const nextValue = latestGetSnapshot();
+    // 与 useEffect 中的一样，进行浅比较
     return !is(prevValue, nextValue);
   } catch (error) {
     return true;
   }
 }
 
+/**
+ * 使用 Sync 阻塞模式渲染，处理优先级和挂载更新节点
+ * @description 
+ * @param {*} fiber
+ * @return {*}
+ * @example  
+ */
 function forceStoreRerender(fiber) {
   scheduleUpdateOnFiber(fiber, SyncLane, NoTimestamp);
 }
@@ -2694,7 +2777,7 @@ const HooksDispatcherOnMount: Dispatcher = {
   useDeferredValue: mountDeferredValue,
   useTransition: mountTransition,
   useMutableSource: mountMutableSource,
-  useSyncExternalStore: mountSyncExternalStore,
+  useSyncExternalStore: mountSyncExternalStore, // useSyncExternalStore 初始化阶段
   useId: mountId,
 
   unstable_isNewReconciler: enableNewReconciler,
@@ -2725,7 +2808,7 @@ const HooksDispatcherOnUpdate: Dispatcher = {
   useDeferredValue: updateDeferredValue,
   useTransition: updateTransition,
   useMutableSource: updateMutableSource,
-  useSyncExternalStore: updateSyncExternalStore,
+  useSyncExternalStore: updateSyncExternalStore, // useSyncExternalStore 更新阶段
   useId: updateId,
 
   unstable_isNewReconciler: enableNewReconciler,

@@ -186,6 +186,16 @@ export function useMutableSource<Source, Snapshot>(
   return dispatcher.useMutableSource(source, getSnapshot, subscribe);
 }
 
+/**
+ * 通过强制的同步状态更新，使得外部 store 可以支持并发读取
+ * https://react.docschina.org/reference/react/useSyncExternalStore
+ * @description 由 useMutableSource 演变而来，主要解决外部数据撕裂的问题，并且官方明确指出是给三方库（如 redux、mobx）使用，而非日常开发使用
+ * 详见 packages/react-reconciler/src/ReactFiberHooks.new.js 中的 HooksDispatcherOnMount 的 useSyncExternalStore
+ * 使用 useSyncExternalStore 的另一个原因是使用浏览器的某些值是可能在将来某个时刻发生变化，如 网络连接状态
+ * 它会在渲染期间检测外部 state 是否变化，如果展示的 UI 不统一，会进行同步阻塞渲染，强制更新，使 UI 保持一致
+ * @return {*}
+ * @example  
+ */
 export function useSyncExternalStore<T>(
   subscribe: (() => void) => () => void,
   getSnapshot: () => T,
