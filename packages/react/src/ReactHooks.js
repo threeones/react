@@ -159,6 +159,15 @@ export function useDebugValue<T>(
 
 export const emptyObject = {};
 
+/**
+ * 诞生的背景：用于不急迫的更新，同时解决并发渲染的问题；useTransition 一定是处理数据量大的数据
+ * @description
+ * 紧急更新任务：用户立马能够看到效果的任务，如 输入框、按钮等
+ * 过渡更新任务：由其他因素引起的，无法在视图上看到效果的任务，如 接口请求数据
+ * 初始化见 packages/react-reconciler/src/ReactFiberHooks.new.js 的 mountTransition
+ * @return {*}
+ * @example  
+ */
 export function useTransition(): [
   boolean,
   (callback: () => void, options?: StartTransitionOptions) => void,
@@ -167,6 +176,19 @@ export function useTransition(): [
   return dispatcher.useTransition();
 }
 
+/**
+ * 可以让状态之后派生，与 useTransition 功能类似，推迟屏幕优先级不高的部分。
+ * useTransition 处理更新函数，useDeferredValue 处理数据本身，类似于 useCallback 和 useMemo 的关系。
+ * 优先使用 useTransition，在使用三方库如 ahooks 时，更新函数没有暴露，只返回值的情况下，可以使用 useDeferredValue 来优化。
+ * @description 
+ * @return {*}
+ * @example  
+const [input, setInput] = useState("");
+const deferredValue = useDeferredValue(input);
+<div>
+  <ul>{deferredValue ? getList(deferredValue) : null}</ul>
+</div>
+ */
 export function useDeferredValue<T>(value: T): T {
   const dispatcher = resolveDispatcher();
   return dispatcher.useDeferredValue(value);

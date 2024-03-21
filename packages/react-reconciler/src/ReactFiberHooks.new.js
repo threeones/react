@@ -2232,6 +2232,12 @@ function updateMemo<T>(
   return nextValue;
 }
 
+/**
+ * useDeferredValue 初始化阶段：初始化 hook，将值保存在 memoizedState 中（见 mountState）
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountDeferredValue<T>(value: T): T {
   const [prevValue, setValue] = mountState(value);
   mountEffect(() => {
@@ -2246,6 +2252,12 @@ function mountDeferredValue<T>(value: T): T {
   return prevValue;
 }
 
+/**
+ * useDeferredValue 更新阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateDeferredValue<T>(value: T): T {
   const [prevValue, setValue] = updateState(value);
   updateEffect(() => {
@@ -2275,14 +2287,19 @@ function rerenderDeferredValue<T>(value: T): T {
 }
 
 function startTransition(setPending, callback, options) {
+  // 获取优先级
   const previousPriority = getCurrentUpdatePriority();
+  // 将当前任务重新设置优先级，并且等级要低于 ContinuousEventPriority（连续事件优先级）：如果优先级低于 ContinuousEventPriority，则使用 previousPriority 优先级；如果高了，则使用 ContinuousEventPriority 优先级
   setCurrentUpdatePriority(
     higherEventPriority(previousPriority, ContinuousEventPriority),
   );
 
+  // 设置一个标记位，此时更新会优先处理
   setPending(true);
 
+  // 标记一个过渡位
   const prevTransition = ReactCurrentBatchConfig.transition;
+  // 会触发批量更新？
   ReactCurrentBatchConfig.transition = {};
   const currentTransition = ReactCurrentBatchConfig.transition;
 
@@ -2298,7 +2315,9 @@ function startTransition(setPending, callback, options) {
   }
 
   try {
+    // 触发 setPending，最终设置回原来的优先级
     setPending(false);
+    // 在 callback 中触发定义的更新
     callback();
   } finally {
     setCurrentUpdatePriority(previousPriority);
@@ -2321,10 +2340,28 @@ function startTransition(setPending, callback, options) {
   }
 }
 
+/**
+ * useTransition 初始化阶段
+ * @description 由 isPending 定义状态，走 startTransition 方法，返回的 start 保存在 memoizedState 中
+ * 对比 startTransition：见 packages/react/src/ReactStartTransition.js。
+ * useTransition 实际上是 useState + startTransition 的结合体，isPending 的状态通过 ReactCurrentBatchConfig.transition 的变化进行更新，以此来捕获过渡时间。
+ * @return {*}
+ * @example  
+const [isPending, startTransition] = useTransition();
+startTransition(() => {
+  const res: string[] = [];
+  for (let i = 0; i < 10000; i++) {
+    res.push(e.target.value);
+  }
+  setList(res);
+});
+{isPending ? (<div>加载中...</div>) : <div>列表内容</div>}
+ */
 function mountTransition(): [
   boolean,
   (callback: () => void, options?: StartTransitionOptions) => void,
 ] {
+  // 定义状态（中间状态，用来判断是否处理中）
   const [isPending, setPending] = mountState(false);
   // The `start` method never changes.
   const start = startTransition.bind(null, setPending);
@@ -2333,6 +2370,12 @@ function mountTransition(): [
   return [isPending, start];
 }
 
+/**
+ * useTransition 更新阶段
+ * @description 调用 updateState 更新 isPending 状态
+ * @return {*}
+ * @example  
+ */
 function updateTransition(): [
   boolean,
   (callback: () => void, options?: StartTransitionOptions) => void,
@@ -2774,8 +2817,8 @@ const HooksDispatcherOnMount: Dispatcher = {
   useRef: mountRef, // uesRef 的初始化处理阶段
   useState: mountState, // 初始化阶段对应的 useState 所走的时 mountState
   useDebugValue: mountDebugValue,
-  useDeferredValue: mountDeferredValue,
-  useTransition: mountTransition,
+  useDeferredValue: mountDeferredValue, // useDeferredValue 初始化阶段
+  useTransition: mountTransition, // useTransition 初始化阶段
   useMutableSource: mountMutableSource,
   useSyncExternalStore: mountSyncExternalStore, // useSyncExternalStore 初始化阶段
   useId: mountId,
@@ -2803,10 +2846,10 @@ const HooksDispatcherOnUpdate: Dispatcher = {
   useMemo: updateMemo, // useMemo 更新阶段
   useReducer: updateReducer,
   useRef: updateRef, // useRef 的更新阶段
-  useState: updateState, // 初始化阶段对应的 useState 所走的时 updateState
+  useState: updateState, // 更新阶段对应的 useState 所走的时 updateState
   useDebugValue: updateDebugValue,
-  useDeferredValue: updateDeferredValue,
-  useTransition: updateTransition,
+  useDeferredValue: updateDeferredValue, // useDeferredValue 更新阶段
+  useTransition: updateTransition, // useTransition 更新阶段
   useMutableSource: updateMutableSource,
   useSyncExternalStore: updateSyncExternalStore, // useSyncExternalStore 更新阶段
   useId: updateId,

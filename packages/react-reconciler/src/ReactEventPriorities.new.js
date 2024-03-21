@@ -46,6 +46,9 @@ export function runWithPriority<T>(priority: EventPriority, fn: () => T): T {
   }
 }
 
+/**
+ * 类似 min(a, b)
+ */
 export function higherEventPriority(
   a: EventPriority,
   b: EventPriority,
