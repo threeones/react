@@ -399,13 +399,14 @@ function areHookInputsEqual(
  * 4. 最后提供整个的异常处理，防止不必要的报错，再将一些属性置空
  * 
  * renderWithHooks 执行阶段：初始化、更新、异常处理
+ * @description 类组件的执行在 packages/react-reconciler/src/ReactFiberClassComponent.new.js 中的 constructClassInstance
  */
 export function renderWithHooks<Props, SecondArg>(
-  current: Fiber | null, // 即 current fiber，渲染完成时所生成的 current 树，之后在 commit 阶段替换为真正的 DOM 树
-  workInProgress: Fiber, // 即 workInProgress fiber，当更新时，复制 current fiber，从这棵树进行更新，更新完毕后，再赋值给 current 树
+  current: Fiber | null, // 当前函数组件对应的 fiber，初始化，即 current fiber，渲染完成时所生成的 current 树，之后在 commit 阶段替换为真正的 DOM 树
+  workInProgress: Fiber, // 当前正在工作的 fiber，即 workInProgress fiber，当更新时，复制 current fiber，从这棵树进行更新，更新完毕后，再赋值给 current 树
   Component: (p: Props, arg: SecondArg) => any, // 函数组件本身
   props: Props, // 函数组件自身的 props
-  secondArg: SecondArg, // 上下文
+  secondArg: SecondArg, // 上下文，函数组件其他参数
   nextRenderLanes: Lanes, // 渲染的优先级
 ): any {
   renderLanes = nextRenderLanes;
@@ -466,7 +467,7 @@ export function renderWithHooks<Props, SecondArg>(
         : HooksDispatcherOnUpdate; // 更新阶段
   }
 
-  // 执行真正的函数式组件，所有 hooks 依次执行
+  // 执行真正的函数式组件，所有 hooks 依次执行，得到返回的 React.element 对象
   let children = Component(props, secondArg);
 
   // Check if there was a render phase update

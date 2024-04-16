@@ -9,6 +9,11 @@ import {REACT_MEMO_TYPE} from 'shared/ReactSymbols';
 
 import isValidElementType from 'shared/isValidElementType';
 
+/**
+ * @description fiber 见 react-reconciler/src/ReactFiberBeginWork.js 的 updateMemoComponent
+ * @return {*}
+ * @example  
+ */
 export function memo<Props>(
   type: React$ElementType,
   compare?: (oldProps: Props, newProps: Props) => boolean,
@@ -24,8 +29,8 @@ export function memo<Props>(
   }
   const elementType = {
     $$typeof: REACT_MEMO_TYPE,
-    type,
-    compare: compare === undefined ? null : compare,
+    type, // 我们的组件
+    compare: compare === undefined ? null : compare, // 第二个参数，用于判断 prop，控制更新
   };
   if (__DEV__) {
     let ownName;

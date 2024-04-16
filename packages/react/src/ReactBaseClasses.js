@@ -17,18 +17,19 @@ if (__DEV__) {
  * Base class helpers for the updating state of a component.
  */
 function Component(props, context, updater) {
-  this.props = props;
-  this.context = context;
+  this.props = props; // 绑定
+  this.context = context; // 绑定
   // If a component has string refs, we will assign a different object later.
-  this.refs = emptyObject;
+  this.refs = emptyObject; // 绑定
   // We initialize the default updater but the real one gets injected by the
   // renderer.
-  this.updater = updater || ReactNoopUpdateQueue;
+  this.updater = updater || ReactNoopUpdateQueue;// 上面所属的 updater 对象
 }
 
 Component.prototype.isReactComponent = {};
 
 /**
+ * 绑定 setState 方法
  * Sets a subset of the state. Always use this to mutate
  * state. You should treat `this.state` as immutable.
  *
@@ -69,6 +70,7 @@ Component.prototype.setState = function(partialState, callback) {
 };
 
 /**
+ * 绑定 forceUpdate 方法
  * Forces an update. This should only be invoked when it is known with
  * certainty that we are **not** in a DOM transaction.
  *
@@ -128,6 +130,7 @@ ComponentDummy.prototype = Component.prototype;
 
 /**
  * Convenience component with default shallow equality check for sCU.
+ * 创建 PureComponent
  */
 function PureComponent(props, context, updater) {
   this.props = props;
@@ -141,6 +144,7 @@ const pureComponentPrototype = (PureComponent.prototype = new ComponentDummy());
 pureComponentPrototype.constructor = PureComponent;
 // Avoid an extra prototype jump for these methods.
 assign(pureComponentPrototype, Component.prototype);
+/** pureComponentPrototype 是纯函数构造函数的 prototype 对象，绑定 isPureReactComponent 属性，在 updateClassInstance 中使用 */
 pureComponentPrototype.isPureReactComponent = true;
 
 export {Component, PureComponent};

@@ -195,6 +195,14 @@ function reportUncaughtErrorInDEV(error) {
   }
 }
 
+/**
+ * 销毁阶段
+ * @description 
+ * @param {*} current
+ * @param {*} instance
+ * @return {*}
+ * @example  
+ */
 const callComponentWillUnmountWithTimer = function(current, instance) {
   instance.props = current.memoizedProps;
   instance.state = current.memoizedState;
@@ -280,7 +288,7 @@ function safelyAttachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
 function safelyDetachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
   const ref = current.ref;
   if (ref !== null) {
-    if (typeof ref === 'function') {
+    if (typeof ref === 'function') { // 函数式、字符串
       let retVal;
       try {
         if (
@@ -466,6 +474,7 @@ function commitBeforeMutationEffectsOnFiber(finishedWork: Fiber) {
               }
             }
           }
+          // 执行生命周期 getSnapshotBeforeUpdate
           const snapshot = instance.getSnapshotBeforeUpdate(
             finishedWork.elementType === finishedWork.type
               ? prevProps
@@ -483,6 +492,7 @@ function commitBeforeMutationEffectsOnFiber(finishedWork: Fiber) {
               );
             }
           }
+          // 将返回值传递给 componentDidUpdate 生命周期
           instance.__reactInternalSnapshotBeforeUpdate = snapshot;
         }
         break;
@@ -750,10 +760,12 @@ function commitLayoutEffectOnFiber(
         }
         break;
       }
-      case ClassComponent: {
+      case ClassComponent: { // 如果是类组件
+        // 类实例
         const instance = finishedWork.stateNode;
         if (finishedWork.flags & Update) {
           if (!offscreenSubtreeWasHidden) {
+            // 类组件第一次调和渲染，调用 componentDidMount
             if (current === null) {
               // We could update instance props and state here,
               // but instead we rely on them being set during last render.
@@ -799,7 +811,7 @@ function commitLayoutEffectOnFiber(
               } else {
                 instance.componentDidMount();
               }
-            } else {
+            } else { // 类组件更新，调用 componentDidUpdate
               const prevProps =
                 finishedWork.elementType === finishedWork.type
                   ? current.memoizedProps
@@ -1166,17 +1178,17 @@ function commitAttachRef(finishedWork: Fiber) {
     const instance = finishedWork.stateNode;
     let instanceToUse;
     switch (finishedWork.tag) {
-      case HostComponent: // 原生元素
+      case HostComponent: // 原生元素节点，获取元素
         instanceToUse = getPublicInstance(instance);
         break;
-      default: // 类组件
+      default: // 类组件，直接使用实例
         instanceToUse = instance;
     }
     // Moved outside to ensure DCE works with this flag
     if (enableScopeAPI && finishedWork.tag === ScopeComponent) {
       instanceToUse = instance;
     }
-    if (typeof ref === 'function') {
+    if (typeof ref === 'function') { // function 和字符串获取方式
       let retVal;
       if (
         enableProfilerTimer &&
@@ -1201,7 +1213,7 @@ function commitAttachRef(finishedWork: Fiber) {
           );
         }
       }
-    } else {
+    } else { // ref 对象方式
       if (__DEV__) {
         if (!ref.hasOwnProperty('current')) {
           console.error(
@@ -1217,9 +1229,17 @@ function commitAttachRef(finishedWork: Fiber) {
   }
 }
 
+/**
+ * ref 置空
+ * @description commit 的 mutation 阶段执行，清空之前的 ref 值为 null
+ * @param {*} current
+ * @return {*}
+ * @example  
+ */
 function commitDetachRef(current: Fiber) {
   const currentRef = current.ref;
   if (currentRef !== null) {
+    // function 和字符串获取方式：ref="node" 或 ref={(node)=> this.node = node }
     if (typeof currentRef === 'function') {
       if (
         enableProfilerTimer &&
@@ -1235,7 +1255,7 @@ function commitDetachRef(current: Fiber) {
       } else {
         currentRef(null);
       }
-    } else {
+    } else { // Ref对象获取方式
       currentRef.current = null;
     }
   }

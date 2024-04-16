@@ -44,16 +44,28 @@ function finishEventHandler() {
   }
 }
 
+/**
+ * 批量更新
+ * @description 
+ * @param {*} fn
+ * @param {*} a
+ * @param {*} b
+ * @return {*}
+ * @example  
+ */
 export function batchedUpdates(fn, a, b) {
   if (isInsideEventHandler) {
     // If we are currently inside another batch, we need to wait until it
     // fully completes before restoring state.
     return fn(a, b);
   }
+  // 开启批量更新
   isInsideEventHandler = true;
   try {
-    return batchedUpdatesImpl(fn, a, b);
+    // 执行了的事件处理函数（如 多个 setState），将在这个函数内执行
+    return batchedUpdatesImpl(fn, a, b); // try 中的 return 不影响 finally 执行
   } finally {
+    // 完成一次事件，批量更新
     isInsideEventHandler = false;
     finishEventHandler();
   }

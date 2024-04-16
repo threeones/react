@@ -184,6 +184,7 @@ function applyDerivedStateFromProps(
     warnOnUndefinedDerivedState(ctor, partialState);
   }
   // Merge the partial state and the previous state.
+  // 合并 state
   const memoizedState =
     partialState === null || partialState === undefined
       ? prevState
@@ -201,21 +202,34 @@ function applyDerivedStateFromProps(
 
 const classComponentUpdater = {
   isMounted,
+  /**
+   * 类似组件内的 setState 的底层调用：Updater.enqueueSetState
+   * @description 
+   * @param {*} inst
+   * @param {*} payload
+   * @param {*} callback
+   * @return {*}
+   * @example  
+   */
   enqueueSetState(inst, payload, callback) {
     const fiber = getInstance(inst);
     const eventTime = requestEventTime();
     const lane = requestUpdateLane(fiber);
 
+    // 每次调用 setState，react 都会创建一个 update
     const update = createUpdate(eventTime, lane);
     update.payload = payload;
     if (callback !== undefined && callback !== null) {
       if (__DEV__) {
         warnOnInvalidCallback(callback, 'setState');
       }
+      // 可以理解为 setState 第二个参数（回调函数）
       update.callback = callback;
     }
 
+    // 把当前的 update 传入当前 fiber 的待更新队列中
     enqueueUpdate(fiber, update, lane);
+    // 开始调度更新
     const root = scheduleUpdateOnFiber(fiber, lane, eventTime);
     if (root !== null) {
       entangleTransitions(root, fiber, lane);
@@ -321,6 +335,7 @@ function checkShouldComponentUpdate(
   nextContext,
 ) {
   const instance = workInProgress.stateNode;
+  // 执行 shouldComponentUpdate，根据返回值决定是否执行 render，调和子节点
   if (typeof instance.shouldComponentUpdate === 'function') {
     // shouldComponentUpdate 更新
     let shouldUpdate = instance.shouldComponentUpdate(
@@ -604,10 +619,18 @@ function adoptClassInstance(workInProgress: Fiber, instance: any): void {
   }
 }
 
+/**
+ * 类组件执行
+ * 
+ * @description 函数组件的执行在 packages/react-reconciler/src/ReactFiberHooks.new.js 中的 renderWithHooks
+ * 用来实例化 React 组件
+ * @return {*}
+ * @example  
+ */
 function constructClassInstance(
-  workInProgress: Fiber,
-  ctor: any,
-  props: any,
+  workInProgress: Fiber, // 当前正在工作的 fiber 对象
+  ctor: any, // 我们的类组件
+  props: any, // 属性
 ): any {
   let isLegacyContextConsumer = false;
   let unmaskedContext = emptyContextObject;
@@ -668,6 +691,7 @@ function constructClassInstance(
       : emptyContextObject;
   }
 
+  // 实例化组件，得到组件示例 instance
   let instance = new ctor(props, context);
   // Instantiate twice to help detect side-effects.
   if (__DEV__) {
@@ -837,7 +861,13 @@ function callComponentWillReceiveProps(
   }
 }
 
-// Invokes the mount life-cycles on a previously never rendered instance.
+/**
+ * Invokes the mount life-cycles on a previously never rendered instance.
+ * 组件初始化阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountClassInstance(
   workInProgress: Fiber,
   ctor: any,
@@ -896,14 +926,18 @@ function mountClassInstance(
 
   instance.state = workInProgress.memoizedState;
 
+  // ctor 就是我们写的类组件，获取类组件的静态方法
   const getDerivedStateFromProps = ctor.getDerivedStateFromProps;
   if (typeof getDerivedStateFromProps === 'function') {
+    // 在 applyDerivedStateFromProps 内执行 getDerivedStateFromProps 生命周期，得到即将合并的 state
     applyDerivedStateFromProps(
       workInProgress,
       ctor,
       getDerivedStateFromProps,
       newProps,
     );
+    // 得到合并的 state：memoizedState
+    // 将 state 赋值到实例上，这就是组件中 this.state 获取到的 state
     instance.state = workInProgress.memoizedState;
   }
 
@@ -915,6 +949,7 @@ function mountClassInstance(
     (typeof instance.UNSAFE_componentWillMount === 'function' ||
       typeof instance.componentWillMount === 'function')
   ) {
+    // 当 getDerivedStateFromProps 和 getSnapshotBeforeUpdate 不存在时，执行 componentWillMount
     callComponentWillMount(workInProgress, instance);
     // If we had additional state updates during this life-cycle, let's
     // process them now.
@@ -1104,7 +1139,13 @@ function resumeMountClassInstance(
   return shouldUpdate;
 }
 
-// Invokes the update life-cycles and returns false if it shouldn't rerender.
+/**
+ * Invokes the update life-cycles and returns false if it shouldn't rerender.
+ * 组件更新阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateClassInstance(
   current: Fiber,
   workInProgress: Fiber,
@@ -1112,6 +1153,7 @@ function updateClassInstance(
   newProps: any,
   renderLanes: Lanes,
 ): boolean {
+  // 类组件示例
   const instance = workInProgress.stateNode;
 
   cloneUpdateQueue(current, workInProgress);
@@ -1135,6 +1177,7 @@ function updateClassInstance(
   }
 
   const getDerivedStateFromProps = ctor.getDerivedStateFromProps;
+  // 判断是否有 getDerivedStateFromProps 生命周期
   const hasNewLifecycles =
     typeof getDerivedStateFromProps === 'function' ||
     typeof instance.getSnapshotBeforeUpdate === 'function';
@@ -1150,10 +1193,12 @@ function updateClassInstance(
     (typeof instance.UNSAFE_componentWillReceiveProps === 'function' ||
       typeof instance.componentWillReceiveProps === 'function')
   ) {
+    // 浅比较 props 不相等
     if (
       unresolvedOldProps !== unresolvedNewProps ||
       oldContext !== nextContext
     ) {
+      // 执行生命周期 componentWillReceiveProps
       callComponentWillReceiveProps(
         workInProgress,
         instance,
@@ -1204,6 +1249,7 @@ function updateClassInstance(
   }
 
   if (typeof getDerivedStateFromProps === 'function') {
+    // 执行 getDerivedStateFromProps，和 mount 类似，合并 state
     applyDerivedStateFromProps(
       workInProgress,
       ctor,
@@ -1242,6 +1288,7 @@ function updateClassInstance(
         typeof instance.componentWillUpdate === 'function')
     ) {
       if (typeof instance.componentWillUpdate === 'function') {
+        // 执行生命周期 componentWillUpdate
         instance.componentWillUpdate(newProps, newState, nextContext);
       }
       if (typeof instance.UNSAFE_componentWillUpdate === 'function') {

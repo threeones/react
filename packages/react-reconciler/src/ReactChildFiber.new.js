@@ -188,7 +188,9 @@ function coerceRef(
       ) {
         return current.ref;
       }
+      // 如果是函数，直接返回 current.ref
       // 统一处理 ref：当 ref 是字符串，走函数的方式
+      // 当 ref 是字符串，React 自动绑定一个函数来处理 ref 逻辑，返回的 ref 是个函数，所以走的是函数方式：`const ref = function(value)` => `ref(<div>)`
       const ref = function(value) {
         let refs = resolvedInst.refs;
         if (refs === emptyRefsObject) {

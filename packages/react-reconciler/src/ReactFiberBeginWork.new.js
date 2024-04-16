@@ -448,6 +448,12 @@ function updateForwardRef(
   return workInProgress.child;
 }
 
+/**
+ * 更新 memo 组件
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateMemoComponent(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -534,11 +540,15 @@ function updateMemoComponent(
     const prevProps = currentChild.memoizedProps;
     // Default to shallow comparison
     let compare = Component.compare;
+    // 如果 memo 有第二个参数，则用第二个参数判定；如果没有，则使用浅比较
     compare = compare !== null ? compare : shallowEqual;
     if (compare(prevProps, nextProps) && current.ref === workInProgress.ref) {
+      // 已经完成工作，停止向下调和节点
       return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
     }
   }
+  // 返回将要更新组件，memo 包装的组件对应的 fiber，继续向下调和更新
+  
   // React DevTools reads this flag.
   workInProgress.flags |= PerformedWork;
   const newChild = createWorkInProgress(currentChild, nextProps);
@@ -1087,17 +1097,24 @@ function updateFunctionComponent(
   return workInProgress.child;
 }
 
+/**
+ * workloop React 处理类组件的主要功能方法
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function updateClassComponent(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  Component: any,
-  nextProps: any,
-  renderLanes: Lanes,
+  current: Fiber | null, // 初始化更新时为 null，第一次 fiber 调和后，会将 workInProgress 树赋值给 current 树；React 用 workInProgress 和 current 确保一次更新中，快速构建，并且状态不丢失
+  workInProgress: Fiber, // 正在调和的 fiber 数，一次更新中，React 会自上而下深度遍历子代 fiber，如果遍历到一个 fiber，会把当前 fiber 指向 workInProgress
+  Component: any, // 项目中的 class 组件
+  nextProps: any, // 作为组件再一次更新中新的 props
+  renderLanes: Lanes, // 下一次渲染的过期时间
 ) {
   if (__DEV__) {
     // This is used by DevTools to force a boundary to error.
     switch (shouldError(workInProgress)) {
       case false: {
+        //  stateNode 是 fiber 指向类组件实例的指针
         const instance = workInProgress.stateNode;
         const ctor = workInProgress.type;
         // TODO This way of resetting the error boundary state is a hack.
@@ -1155,8 +1172,10 @@ function updateClassComponent(
   }
   prepareToReadContext(workInProgress, renderLanes);
 
+  //  stateNode 是 fiber 指向类组件实例的指针
   const instance = workInProgress.stateNode;
   let shouldUpdate;
+  // instance 为组件实例，如果组件实例不存在，证明类组件没有被挂载过，走初始化流程 mountClassInstance
   if (instance === null) {
     if (current !== null) {
       // A class component without an instance only mounts if it suspended
@@ -1169,8 +1188,11 @@ function updateClassComponent(
       workInProgress.flags |= Placement;
     }
     // In the initial pass we might need to construct the instance.
+    // 组件实例将在这个方法中被 new
     constructClassInstance(workInProgress, Component, nextProps);
+    // 初始化挂载组件流程
     mountClassInstance(workInProgress, Component, nextProps, renderLanes);
+    // 标记组件是否需要更新
     shouldUpdate = true;
   } else if (current === null) {
     // In a resume, we'll already have an instance we can reuse.
@@ -1181,6 +1203,7 @@ function updateClassComponent(
       renderLanes,
     );
   } else {
+    // 组件实例更新流程
     shouldUpdate = updateClassInstance(
       current,
       workInProgress,
@@ -1274,6 +1297,7 @@ function finishClassComponent(
       }
       setIsRendering(false);
     } else {
+      // 执行 render 函数，得到子节点
       nextChildren = instance.render();
     }
     if (enableSchedulingProfiler) {
@@ -1295,6 +1319,7 @@ function finishClassComponent(
       renderLanes,
     );
   } else {
+    // 继续调和子节点
     reconcileChildren(current, workInProgress, nextChildren, renderLanes);
   }
 
