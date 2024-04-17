@@ -49,9 +49,9 @@ export type LazyComponent<T, P> = {
 };
 
 function lazyInitializer<T>(payload: Payload<T>): T {
-  if (payload._status === Uninitialized) {
+  if (payload._status === Uninitialized) { // 第一次执行走这里
     const ctor = payload._result;
-    const thenable = ctor();
+    const thenable = ctor(); // 得到一个 Promise
     // Transition to the next state.
     // This might throw either because it's missing or throws. If so, we treat it
     // as still uninitialized and try again next time. Which is the same as what
@@ -61,9 +61,14 @@ function lazyInitializer<T>(payload: Payload<T>): T {
       moduleObject => {
         if (payload._status === Pending || payload._status === Uninitialized) {
           // Transition to the next state.
-          const resolved: ResolvedPayload<T> = (payload: any);
-          resolved._status = Resolved;
-          resolved._result = moduleObject;
+          const resolved: ResolvedPayload<T> = (payload: any); // const resolved = payload; 赋值引用地址
+          resolved._status = Resolved; // 1 成功状态
+          resolved._result = moduleObject; // 动态加载的组件本身，将要渲染的组件
+          /* 相当于
+            payload._status = Resolved;
+            payload._result = moduleObject;
+          */
+          // 这之后 Suspense 会发起第二次渲染
         }
       },
       error => {
@@ -83,7 +88,8 @@ function lazyInitializer<T>(payload: Payload<T>): T {
       pending._result = thenable;
     }
   }
-  if (payload._status === Resolved) {
+  // 因为第一次渲染走到这里的时候状态并不是 Resolved，所以会走到 else，抛出异常 Promise，终止当前渲染（此时会走到 Suspense 的 fallback，渲染加载中的组件）
+  if (payload._status === Resolved) { // 1 成功状态
     const moduleObject = payload._result;
     if (__DEV__) {
       if (moduleObject === undefined) {
@@ -112,8 +118,8 @@ function lazyInitializer<T>(payload: Payload<T>): T {
         );
       }
     }
-    return moduleObject.default;
-  } else {
+    return moduleObject.default; // 第二次渲染，init 方法已经是 Resolved 状态，直接返回 payload._result.default 就是真正渲染的组件
+  } else { // 第一次渲染，会抛出 Promise 异常给 Suspense，Suspense 会处理 Promise，Promise 执行成功回调，得到 defaultExport（将要渲染的组件）
     throw payload._result;
   }
 }
@@ -123,14 +129,14 @@ export function lazy<T>(
 ): LazyComponent<T, Payload<T>> {
   const payload: Payload<T> = {
     // We use these fields to store the result.
-    _status: Uninitialized,
+    _status: Uninitialized, // 初始化状态 -1
     _result: ctor,
   };
 
   const lazyType: LazyComponent<T, Payload<T>> = {
-    $$typeof: REACT_LAZY_TYPE,
+    $$typeof: REACT_LAZY_TYPE, // 标记类型，在调和阶段会变成 LazyComponent 类型的 fiber
     _payload: payload,
-    _init: lazyInitializer,
+    _init: lazyInitializer, // 首次渲染执行 init
   };
 
   if (__DEV__) {
