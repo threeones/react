@@ -233,20 +233,21 @@ function executeDispatch(
 
 function processDispatchQueueItemsInOrder(
   event: ReactSyntheticEvent,
-  dispatchListeners: Array<DispatchListener>,
+  dispatchListeners: Array<DispatchListener>, // [子元素捕获事件, 父元素捕获事件] [子元素冒泡事件, 父元素冒泡事件]
   inCapturePhase: boolean,
 ): void {
   let previousInstance;
-  if (inCapturePhase) {
+  if (inCapturePhase) { // 捕获阶段，从后往前，从父往子
     for (let i = dispatchListeners.length - 1; i >= 0; i--) {
       const {instance, currentTarget, listener} = dispatchListeners[i];
       if (instance !== previousInstance && event.isPropagationStopped()) {
         return;
       }
+      // 执行事件
       executeDispatch(event, listener, currentTarget);
       previousInstance = instance;
     }
-  } else {
+  } else { // 冒泡阶段，从前往后，从子往前
     for (let i = 0; i < dispatchListeners.length; i++) {
       const {instance, currentTarget, listener} = dispatchListeners[i];
       if (instance !== previousInstance && event.isPropagationStopped()) {
@@ -279,8 +280,11 @@ function dispatchEventsForPlugins(
   targetInst: null | Fiber,
   targetContainer: EventTarget,
 ): void {
+  // 找到发生事件的元素-事件源
   const nativeEventTarget = getEventTarget(nativeEvent);
+  // 待更新队列
   const dispatchQueue: DispatchQueue = [];
+  // 找到待执行的事件
   extractEvents(
     dispatchQueue,
     domEventName,
@@ -290,6 +294,7 @@ function dispatchEventsForPlugins(
     eventSystemFlags,
     targetContainer,
   );
+  // 执行事件
   processDispatchQueue(dispatchQueue, eventSystemFlags);
 }
 
@@ -386,13 +391,19 @@ const listeningMarker =
 export function listenToAllSupportedEvents(rootContainerElement: EventTarget) {
   if (!(rootContainerElement: any)[listeningMarker]) {
     (rootContainerElement: any)[listeningMarker] = true;
+    // allNativeEvents 是一个 set 集合，保存了大多数浏览器事件
     allNativeEvents.forEach(domEventName => {
       // We handle selectionchange separately because it
       // doesn't bubble and needs to be on the document.
       if (domEventName !== 'selectionchange') {
-        if (!nonDelegatedEvents.has(domEventName)) {
+        // 事件如果不冒泡，在捕获阶段执行一次 listenToNativeEvent；如果是常规事件，执行两次 listenToNativeEvent，分别在冒泡和捕获阶段
+
+        // nonDelegatedEvents 保存了不冒泡的事件，一般指媒体事件（如 pause、play、playing 等）和特殊事件（cancel、close、invalid 等）
+        if (!nonDelegatedEvents.has(domEventName)) { // 这里获取到冒泡的事件
+          // 在冒泡阶段绑定事件
           listenToNativeEvent(domEventName, false, rootContainerElement);
         }
+        // 在捕获阶段绑定事件
         listenToNativeEvent(domEventName, true, rootContainerElement);
       }
     });
@@ -645,8 +656,11 @@ export function dispatchEventForPluginEventSystem(
 }
 
 function createDispatchListener(
+  /** button 对应的 fiber 元素 */
   instance: null | Fiber,
+  /** 一个数组，存放绑定的事件处理函数本身，比如绑定的 onClick、onClickCapture */
   listener: Function,
+  /** 发生事件的 DOM 元素 */
   currentTarget: EventTarget,
 ): DispatchListener {
   return {
@@ -944,6 +958,7 @@ export function accumulateEnterLeaveTwoPhaseListeners(
 
 export function accumulateEventHandleNonManagedNodeListeners(
   reactEventType: DOMEventName,
+  /** 发生事件的 DOM 元素 */
   currentTarget: EventTarget,
   inCapturePhase: boolean,
 ): Array<DispatchListener> {

@@ -80,10 +80,11 @@ export function executeDispatchesInOrder(event) {
   }
   if (isArray(dispatchListeners)) {
     for (let i = 0; i < dispatchListeners.length; i++) {
-      if (event.isPropagationStopped()) {
+      if (event.isPropagationStopped()) { // 判断是否已经阻止事件冒泡
         break;
       }
       // Listeners and Instances are two parallel arrays that are always in sync.
+      // 执行真正的处理函数
       executeDispatch(event, dispatchListeners[i], dispatchInstances[i]);
     }
   } else if (dispatchListeners) {

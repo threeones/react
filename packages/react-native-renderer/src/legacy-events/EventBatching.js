@@ -54,7 +54,7 @@ export function runEventsInBatch(
     return;
   }
 
-  forEachAccumulated(processingEventQueue, executeDispatchesAndReleaseTopLevel);
+  forEachAccumulated(processingEventQueue, executeDispatchesAndReleaseTopLevel); // 见 executeDispatchesAndReleaseTopLevel > executeDispatchesAndRelease > executeDispatchesInOrder
 
   if (eventQueue) {
     throw new Error(

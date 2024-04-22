@@ -64,6 +64,7 @@ function extractEvents(
   }
   let SyntheticEventCtor = SyntheticEvent;
   let reactEventType: string = domEventName;
+  // 针对不同的事件，处理不同的事件源
   switch (domEventName) {
     case 'keypress':
       // Firefox creates a keypress event for function keys too. This removes
@@ -163,6 +164,7 @@ function extractEvents(
     enableCreateEventHandleAPI &&
     eventSystemFlags & IS_EVENT_HANDLE_NON_MANAGED_NODE
   ) {
+    // 找到事件监听者，也就是 onClick 绑定的事件处理函数
     const listeners = accumulateEventHandleNonManagedNodeListeners(
       // TODO: this cast may not make sense for events like
       // "focus" where React listens to e.g. "focusin".
@@ -170,6 +172,7 @@ function extractEvents(
       targetContainer,
       inCapturePhase,
     );
+    // 向 dispatchQueue 添加 event 和 listeners
     if (listeners.length > 0) {
       // Intentionally create event lazily.
       const event = new SyntheticEventCtor(

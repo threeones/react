@@ -685,7 +685,7 @@ export function diffProperties(
       // Noop
     } else if (propKey === AUTOFOCUS) {
       // Noop. It doesn't work on updates anyway.
-    } else if (registrationNameDependencies.hasOwnProperty(propKey)) {
+    } else if (registrationNameDependencies.hasOwnProperty(propKey)) { // 判断danqi的 propKey 是不是 React 合成事件
       // This is a special case. If any listener updates we need to ensure
       // that the "current" fiber pointer gets updated so we need a commit
       // to update this element.
@@ -771,7 +771,7 @@ export function diffProperties(
       propKey === SUPPRESS_HYDRATION_WARNING
     ) {
       // Noop
-    } else if (registrationNameDependencies.hasOwnProperty(propKey)) {
+    } else if (registrationNameDependencies.hasOwnProperty(propKey)) { // 判断danqi的 propKey 是不是 React 合成事件
       if (nextProp != null) {
         // We eagerly listen to this even though we haven't committed yet.
         if (__DEV__ && typeof nextProp !== 'function') {
