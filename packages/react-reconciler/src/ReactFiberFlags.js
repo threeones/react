@@ -16,17 +16,23 @@ export const NoFlags = /*                      */ 0b00000000000000000000000000;
 export const PerformedWork = /*                */ 0b00000000000000000000000001;
 
 // You can change the rest (and add more).
+/** 插入节点 */
 export const Placement = /*                    */ 0b00000000000000000000000010;
+/** 更新 fiber */
 export const Update = /*                       */ 0b00000000000000000000000100;
 export const PlacementAndUpdate = /*           */ Placement | Update;
+/** 删除 fiber */
 export const Deletion = /*                     */ 0b00000000000000000000001000;
 export const ChildDeletion = /*                */ 0b00000000000000000000010000;
 export const ContentReset = /*                 */ 0b00000000000000000000100000;
+/** setState 的 callback */
 export const Callback = /*                     */ 0b00000000000000000001000000;
 export const DidCapture = /*                   */ 0b00000000000000000010000000;
 export const ForceClientRender = /*            */ 0b00000000000000000100000000;
 export const Ref = /*                          */ 0b00000000000000001000000000;
+/** 快照 */
 export const Snapshot = /*                     */ 0b00000000000000010000000000;
+/** useEffect 的副作用 */
 export const Passive = /*                      */ 0b00000000000000100000000000;
 export const Hydrating = /*                    */ 0b00000000000001000000000000;
 export const HydratingAndUpdate = /*           */ Hydrating | Update;

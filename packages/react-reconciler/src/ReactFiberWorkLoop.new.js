@@ -720,6 +720,16 @@ export function isInterleavedUpdate(fiber: Fiber, lane: Lane) {
 // of the existing task is the same as the priority of the next level that the
 // root has work on. This function is called on every update, and right before
 // exiting a task.
+/**
+ * React 发生更新会统一走 ensureRootIsScheduled（调度应用）
+ * @description 正常更新会走 performSyncWorkOnRoot > workLoopSync
+ * 低优先级的异步更新会走 performConcurrentWorkOnRoot > workLoopConcurrent
+ * 见 react-reconciler/src/ReactFiberWorkLoop.js 的 workLoopSync 和 workLoopConcurrent
+ * @param {*} root
+ * @param {*} currentTime
+ * @return {*}
+ * @example  
+ */
 function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
   const existingCallbackNode = root.callbackNode;
 
@@ -744,6 +754,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
   }
 
   // We use the highest priority lane to represent the priority of the callback.
+  // 回调优先级
   const newCallbackPriority = getHighestPriorityLane(nextLanes);
 
   // Check if there's an existing task. We may be able to reuse it.
@@ -783,7 +794,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
 
   // Schedule a new callback.
   let newCallbackNode;
-  if (newCallbackPriority === SyncLane) {
+  if (newCallbackPriority === SyncLane) { // 正常更新：performSyncWorkOnRoot > workLoopSync
     // Special case: Sync React callbacks are scheduled on a special
     // internal queue
     if (root.tag === LegacyRoot) {
@@ -816,28 +827,30 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
       }
     } else {
       // Flush the queue in an Immediate task.
+      // 类似 scheduleCallback(Immediate, workLoopSync)
       scheduleCallback(ImmediateSchedulerPriority, flushSyncCallbacks);
     }
     newCallbackNode = null;
-  } else {
-    let schedulerPriorityLevel;
+  } else { // 优先级低的异步更新：performConcurrentWorkOnRoot > workLoopConcurrent；计算得到 priorityLevel 调度优先级
+    let schedulerPriorityLevel; // 计算超时等级
     switch (lanesToEventPriority(nextLanes)) {
       case DiscreteEventPriority:
-        schedulerPriorityLevel = ImmediateSchedulerPriority;
+        schedulerPriorityLevel = ImmediateSchedulerPriority; // Immediate -1 需要立刻执行
         break;
       case ContinuousEventPriority:
-        schedulerPriorityLevel = UserBlockingSchedulerPriority;
+        schedulerPriorityLevel = UserBlockingSchedulerPriority; // UserBlocking 250ms 超时时间250ms，一般指的是用户交互
         break;
       case DefaultEventPriority:
-        schedulerPriorityLevel = NormalSchedulerPriority;
+        schedulerPriorityLevel = NormalSchedulerPriority; // Normal 5000ms 超时时间5s，不需要直观立即变化的任务，比如网络请求
         break;
       case IdleEventPriority:
-        schedulerPriorityLevel = IdleSchedulerPriority;
+        schedulerPriorityLevel = IdleSchedulerPriority;  // Idle 一些没有必要的任务，可能不会执行
         break;
       default:
         schedulerPriorityLevel = NormalSchedulerPriority;
         break;
     }
+    // 类似 scheduleCallback(priorityLevel, workLoopConcurrent)
     newCallbackNode = scheduleCallback(
       schedulerPriorityLevel,
       performConcurrentWorkOnRoot.bind(null, root),
@@ -1732,8 +1745,14 @@ function renderRootSync(root: FiberRoot, lanes: Lanes) {
 
 // The work loop is an extremely hot path. Tell Closure not to inline it.
 /** @noinline */
+/**
+ * @description 正常更新
+ * @return {*}
+ * @example  
+ */
 function workLoopSync() {
   // Already timed out, so perform work without checking if we need to yield.
+  // 在一次更新调度过程中，workLoop 会更新执行每一个待更新的 fiber
   while (workInProgress !== null) {
     performUnitOfWork(workInProgress);
   }
@@ -1820,8 +1839,15 @@ function renderRootConcurrent(root: FiberRoot, lanes: Lanes) {
 }
 
 /** @noinline */
+/**
+ * @description 低优先级的异步更新
+ * @return {*}
+ * @example  
+ */
 function workLoopConcurrent() {
   // Perform work until Scheduler asks us to yield
+  // 异步模式会调用一个 shouldYield()，如果当前浏览器没有空余时间，shouldYield 中止循环，直到浏览器有空闲时间后再继续遍历，从而达到终止渲染的目的
+  // 见 packages/scheduler/src/forks/Scheduler.js 的 unstable_shouldYield
   while (workInProgress !== null && !shouldYield()) {
     performUnitOfWork(workInProgress);
   }
@@ -1837,6 +1863,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   let next;
   if (enableProfilerTimer && (unitOfWork.mode & ProfileMode) !== NoMode) {
     startProfilerTimer(unitOfWork);
+    // 向下调和的过程：由 fiberRoot 按照 child 指针逐层向下调和，期间会指向函数组件、实例类组件，diff 调和子组件，打不同的 effectTag（副作用标签）
     next = beginWork(current, unitOfWork, subtreeRenderLanes);
     stopProfilerTimerIfRunningAndRecordDelta(unitOfWork, true);
   } else {
@@ -1847,6 +1874,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   unitOfWork.memoizedProps = unitOfWork.pendingProps;
   if (next === null) {
     // If this doesn't spawn new work, complete the current work.
+    // 向上归并的过程：兄弟节点（sibling 节点） > 父级节点（return 节点） > fiberRoot；期间形成 effectList，在初始化流程时会创建 DOM，对于 DOM 元素进行事件收集、处理 style、className
     completeUnitOfWork(unitOfWork);
   } else {
     workInProgress = next;
@@ -1855,6 +1883,13 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   ReactCurrentOwner.current = null;
 }
 
+/**
+ * @description 向上归并的过程：兄弟节点（sibling 节点） > 父级节点（return 节点） > fiberRoot；期间形成 effectList，在初始化流程时会创建 DOM，对于 DOM 元素进行事件收集、处理 style、className
+ * 过程：将 effectTag 的 fiber 节点保存在 effectList 的单向链表中，在 commit 阶段就不再需要遍历每个 fiber 了，只需要执行更新 effectList 就可以
+ * @param {*} unitOfWork
+ * @return {*}
+ * @example  
+ */
 function completeUnitOfWork(unitOfWork: Fiber): void {
   // Attempt to complete the current unit of work, then move to the next
   // sibling. If there are no more siblings, return to the parent fiber.
@@ -2905,6 +2940,12 @@ function warnAboutUpdateOnNotYetMountedFiberInDEV(fiber) {
   }
 }
 
+/**
+ * @description 向下调和的过程：由 fiberRoot 按照 child 指针逐层向下调和，期间会指向函数组件、实例类组件，diff 调和子组件，打不同的 effectTag（副作用标签）
+ * 详细见 packages/react-reconciler/src/ReactFiberBeginWork.new.js 的 beginWork
+ * @return {*}
+ * @example  
+ */
 let beginWork;
 if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
   const dummyFiber = null;
@@ -3050,9 +3091,10 @@ export function restorePendingUpdaters(root: FiberRoot, lanes: Lanes): void {
 }
 
 const fakeActCallbackNode = {};
+
 /**
  * scheduleCallback 是 React 调度器（Scheduler）的一个 API，最终通过一个宏任务来异步调度传入的回调函数，使得该回调在下一轮事件循环中执行，此时浏览器已经绘制过一次
- * @description 
+ * @description workLoopSync 和 workLoopConcurrent 都是由调度器统一调度的
  * @param {*} priorityLevel 调度优先级
  * @param {*} callback 回调函数
  * @return {*}
@@ -3067,6 +3109,7 @@ function scheduleCallback(priorityLevel, callback) {
       actQueue.push(callback);
       return fakeActCallbackNode;
     } else {
+      // 见 packages/scheduler/src/forks/Scheduler.js 的 unstable_scheduleCallback
       return Scheduler_scheduleCallback(priorityLevel, callback);
     }
   } else {

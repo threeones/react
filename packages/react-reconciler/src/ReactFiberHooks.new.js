@@ -402,12 +402,20 @@ function areHookInputsEqual(
  * @description 类组件的执行在 packages/react-reconciler/src/ReactFiberClassComponent.new.js 中的 constructClassInstance
  */
 export function renderWithHooks<Props, SecondArg>(
-  current: Fiber | null, // 当前函数组件对应的 fiber，初始化，即 current fiber，渲染完成时所生成的 current 树，之后在 commit 阶段替换为真正的 DOM 树
-  workInProgress: Fiber, // 当前正在工作的 fiber，即 workInProgress fiber，当更新时，复制 current fiber，从这棵树进行更新，更新完毕后，再赋值给 current 树
-  Component: (p: Props, arg: SecondArg) => any, // 函数组件本身
-  props: Props, // 函数组件自身的 props
-  secondArg: SecondArg, // 上下文，函数组件其他参数
-  nextRenderLanes: Lanes, // 渲染的优先级
+  /** 当前函数组件对应的 fiber，初始化，即 current fiber，渲染完成时所生成的 current 树，之后在 commit 阶段替换为真正的 DOM 树 */
+  current: Fiber | null,
+  /** 当前正在工作的 fiber，即 workInProgress fiber，当更新时，复制 current fiber，从这棵树进行更新，更新完毕后，再赋值给 current 树
+   * 正在调和更新函数组件对应的 fiber 树
+   */
+  workInProgress: Fiber,
+  /** 函数组件本身 */
+  Component: (p: Props, arg: SecondArg) => any,
+  /** 函数组件自身的 props */
+  props: Props,
+  /** 上下文，函数组件其他参数 */
+  secondArg: SecondArg,
+  /** 渲染的优先级 */
+  nextRenderLanes: Lanes,
 ): any {
   renderLanes = nextRenderLanes;
   currentlyRenderingFiber = workInProgress;
@@ -424,9 +432,10 @@ export function renderWithHooks<Props, SecondArg>(
   }
 
   // memoizedState：用于存放 hooks 的信息，如果是类组件，则存放 state 信息
+  // 每次执行函数组件前，先清空状态（用于存放 hooks 列表）
   workInProgress.memoizedState = null;
   // updateQueue：更新队列，用于存放 effect list，也就是 useEffect 产生副作用形成的链表
-  workInProgress.updateQueue = null;
+  workInProgress.updateQueue = null; // 清空状态
   workInProgress.lanes = NoLanes;
 
   // The following should have already been reset
@@ -519,6 +528,7 @@ export function renderWithHooks<Props, SecondArg>(
   // 我们可以假设上一个调度器总是这个，因为我们设置了它
   // 在渲染阶段开始时，没有重新进入。
   // 防止 hooks 乱用，提供的报错方案
+  // 防止 hooks 在函数组件外部调用，调用直接报错
   ReactCurrentDispatcher.current = ContextOnlyDispatcher;
 
   if (__DEV__) {
@@ -680,6 +690,7 @@ export function resetHooksAfterThrow(): void {
  * 所有的 hooks 都会走这个函数，只是不同的 Hooks 保存不同的信息
  * 作用尤为重要，它将 Hooks 与 Fiber 联系起来（将 hook 放入 fiber.memoizedState）
  * 每执行一个 Hooks 函数就会生成一个 hook 对象，然后将每个 hook 以链表的方式串联起来
+ * 函数组件对应的 fiber 用 memoizedState 保存 hooks 信息，每个 hooks 通过 next 链表建立起关系
  */
 function mountWorkInProgressHook(): Hook {
   const hook: Hook = {
@@ -689,11 +700,15 @@ function mountWorkInProgressHook(): Hook {
      */
     memoizedState: null,
 
-    baseState: null, // 当数据发生改变时，保存最新的值
-    baseQueue: null, // 保存最新的更新队列
-    queue: null, // 保存待更新的队列或更新的函数
+    /** 当数据发生改变时，保存最新的值 */
+    baseState: null,
+    /** 保存最新的更新队列 */
+    baseQueue: null,
+    /** 保存待更新的队列或更新的函数 */
+    queue: null,
 
-    next: null, // 用于指向下一个 hooks 对象
+    /** 用于指向下一个 hooks 对象 */
+    next: null,
   };
 
   if (workInProgressHook === null) {
@@ -808,6 +823,12 @@ function basicStateReducer<S>(state: S, action: BasicStateAction<S>): S {
   return typeof action === 'function' ? action(state) : action;
 }
 
+/**
+ * useReducer 初始化阶段
+ * @description 
+ * @return {*}
+ * @example  
+ */
 function mountReducer<S, I, A>(
   reducer: (S, A) => S,
   initialArg: I,
@@ -839,6 +860,7 @@ function mountReducer<S, I, A>(
 }
 
 /**
+ * useReducer 更新阶段
  * HooksDispatcherOnUpdate-useState-updateState-updateReducer-updateWorkInProgressHook
  * 作用：将待更新队列 pendingQueue 合并到 baseQueue 上，之后进行循环更新，最后进行一次合成更新，也就是批量更新，统一更换节点
  * 解释了 useState 在更新的过程中传入相同的值时不进行更新，同时多次操作，只会执行最后一次更新
@@ -879,6 +901,7 @@ function updateReducer<S, I, A>(
     if (baseQueue !== null) {
       // Merge the pending queue and the base queue.
       // 合并挂起队列和基本队列。
+      // 把待更新的 pending 队列取出来，合并到 baseQueue
       const baseFirst = baseQueue.next;
       const pendingFirst = pendingQueue.next;
       baseQueue.next = pendingFirst;
@@ -968,6 +991,7 @@ function updateReducer<S, I, A>(
           newState = ((update.eagerState: any): S);
         } else {
           const action = update.action;
+          // 得到新的 state
           newState = reducer(newState, action);
         }
       }
@@ -1691,6 +1715,7 @@ function forceStoreRerender(fiber) {
 
 /**
  * 初始化阶段的 HooksDispatcherOnMount 内的 useState 走的是 mountState
+ * useState 和 useReducer 触发更新的本质函数是 dispatchAction/dispatchSetState
  */
 function mountState<S>(
   initialState: (() => S) | S,
@@ -1705,6 +1730,7 @@ function mountState<S>(
   }
   // 将初始值赋值
   hook.memoizedState = hook.baseState = initialState;
+  // 负责记录更新的各种状态
   const queue: UpdateQueue<S, BasicStateAction<S>> = {
     pending: null, // 用来调用 dispatch 创建时的最后一个
     interleaved: null, // 
@@ -1718,6 +1744,7 @@ function mountState<S>(
    * 这个 dispatch 就是 [count, setCount] = useState(0); 中的 setCount
    * dispatch 的机制就是 dispatchSetState，具体看 dispatchSetState
    * 这里 bind 的作用是，产生新的函数，第一个参数作为新函数的 this，如果为 null/undefined 则默认执行 window，其余参数成为旧函数的参数
+   * dispatchSetState 更新调度的主要函数，当用户触发 setCount 时能直观反映出来自哪个 fiber 的更新
    */  
   const dispatch: Dispatch<
     BasicStateAction<S>,
@@ -1871,7 +1898,7 @@ function mountRef<T>(initialValue: T): {|current: T|} {
     }
   } else {
     const ref = {current: initialValue};
-    hook.memoizedState = ref;
+    hook.memoizedState = ref; // 创建 ref 对象
     return ref;
   }
 }
@@ -1884,7 +1911,7 @@ function mountRef<T>(initialValue: T): {|current: T|} {
  */
 function updateRef<T>(initialValue: T): {|current: T|} {
   const hook = updateWorkInProgressHook();
-  return hook.memoizedState;
+  return hook.memoizedState; // 取出复用 ref 对象
 }
 
 /**
@@ -1904,7 +1931,7 @@ function mountEffectImpl(fiberFlags, hookFlags, create, deps): void {
   const nextDeps = deps === undefined ? null : deps;
   // 给 hook 所在的 fiber 打上副作用的更新标记
   currentlyRenderingFiber.flags |= fiberFlags;
-  // 将副作用的操作存放到 hook.memoizedState 中
+  // 将副作用的操作存放到 hook.memoizedState 中；如果存在多个 effect 或 layoutEffect，会形成一个副作用链表，绑定在函数组件 fiber 的 updateQueue 上，等到在 commit 阶段统一处理和执行
   hook.memoizedState = pushEffect(
     HookHasEffect | hookFlags,
     create,
@@ -1939,7 +1966,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
     destroy = prevEffect.destroy;
     if (nextDeps !== null) {
       const prevDeps = prevEffect.deps;
-      // 判断依赖是否发生改变，如果没有，只更新副作用链表
+      // 判断 deps 依赖项是否发生改变，如果没有，只更新副作用链表
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         hook.memoizedState = pushEffect(hookFlags, create, destroy, nextDeps);
         return;
@@ -1947,7 +1974,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
     }
   }
 
-  // 如果依赖发生改变，则在更新链表的时候，打上对应的标签
+  // 如果依赖发生改变，则在更新链表的时候，打上对应的标签：fiber => fiberEffectTag，hook => HookHasEffect；在 commit 阶段根据这些标签，重新执行副作用
   currentlyRenderingFiber.flags |= fiberFlags;
 
   hook.memoizedState = pushEffect(
@@ -1963,8 +1990,10 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
  * useEffect(() => {}, [])，其中 () => {} 是 create，[] 是 deps
  */
 function mountEffect(
-  create: () => (() => void) | void, // 回调函数，即 副作用函数
-  deps: Array<mixed> | void | null, // 依赖项
+  /** 回调函数，即 副作用函数 */
+  create: () => (() => void) | void
+  /** 依赖项 */,
+  deps: Array<mixed> | void | null,
 ): void {
   if (
     __DEV__ &&
@@ -2195,7 +2224,9 @@ function mountMemo<T>(
   // 初始化一个 hook对象，并与 fiber 建立关系
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
+  // 执行函数得到需要缓存的值
   const nextValue = nextCreate();
+  // 缓存到 hook 的 memoizedState 上
   hook.memoizedState = [nextValue, nextDeps];
   return nextValue;
 }
@@ -2228,6 +2259,7 @@ function updateMemo<T>(
       }
     }
   }
+  // 如果 deps 发生改变，重新执行并缓存
   const nextValue = nextCreate();
   hook.memoizedState = [nextValue, nextDeps];
   return nextValue;
@@ -2549,9 +2581,11 @@ function dispatchReducerAction<S, A>(
  * dispatch 的机制，也就是 [count, setCount] 中 setCount 的机制
  */
 function dispatchSetState<S, A>(
-  fiber: Fiber, // 对应 currentlyRenderingFiber = workInProgress;
+  /** 对应 currentlyRenderingFiber = workInProgress; */
+  fiber: Fiber,
   queue: UpdateQueue<S, A>,
-  action: A, // 真实传入的参数，实际写的函数，如 setCount((val) => val++) 中的 (val) => val++
+  /** 真实传入的参数，实际写的函数，如 setCount((val) => val++) 中的 (val) => val++ */
+  action: A,
 ) {
   if (__DEV__) {
     if (typeof arguments[3] === 'function') {
@@ -2578,7 +2612,7 @@ function dispatchSetState<S, A>(
   /**
    * 判断是否在渲染阶段：
    *  如果是渲染阶段，则将 update 放入等待更新的 pending 队列中；
-   *  如果不是，就会获取最新的 state 值，从而更新（lastRenderedReducer）
+   *  如果不是，就会获取最新的 state 值，从而更新（lastRenderedReducer）；对比上一次的 state（使用 is(eagerState, currentState) 浅比较）：如果相同，退出更新；如果不同，发起调度更新
    */  
   if (isRenderPhaseUpdate(fiber)) {
     // 排队渲染阶段更新，最终会 将 update 存入到 queue.pending 中
@@ -2603,6 +2637,7 @@ function dispatchSetState<S, A>(
           ReactCurrentDispatcher.current = InvalidNestedHooksDispatcherOnUpdateInDEV;
         }
         try {
+          // 上一次的 state
           const currentState: S = (queue.lastRenderedState: any);
           // 获取最新的 state，从而进行更新
           const eagerState = lastRenderedReducer(currentState, action);
@@ -2631,7 +2666,7 @@ function dispatchSetState<S, A>(
     }
     const eventTime = requestEventTime();
     // 实时更新节点的信息
-    const root = scheduleUpdateOnFiber(fiber, lane, eventTime);
+    const root = scheduleUpdateOnFiber(fiber, lane, eventTime); // 发起调度更新
     if (root !== null) {
       entangleTransitionUpdate(root, queue, lane);
     }
@@ -2814,7 +2849,7 @@ const HooksDispatcherOnMount: Dispatcher = {
   useLayoutEffect: mountLayoutEffect,
   useInsertionEffect: mountInsertionEffect,
   useMemo: mountMemo, // useMemo 初始化阶段
-  useReducer: mountReducer,
+  useReducer: mountReducer, // useReducer 初始化阶段
   useRef: mountRef, // uesRef 的初始化处理阶段
   useState: mountState, // 初始化阶段对应的 useState 所走的时 mountState
   useDebugValue: mountDebugValue,
@@ -2845,7 +2880,7 @@ const HooksDispatcherOnUpdate: Dispatcher = {
   useInsertionEffect: updateInsertionEffect,
   useLayoutEffect: updateLayoutEffect,
   useMemo: updateMemo, // useMemo 更新阶段
-  useReducer: updateReducer,
+  useReducer: updateReducer, // useReducer 更新阶段
   useRef: updateRef, // useRef 的更新阶段
   useState: updateState, // 更新阶段对应的 useState 所走的时 updateState
   useDebugValue: updateDebugValue,

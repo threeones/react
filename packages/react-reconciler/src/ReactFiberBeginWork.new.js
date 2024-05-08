@@ -284,13 +284,19 @@ if (__DEV__) {
   didWarnAboutDefaultPropsOnFunctionComponent = {};
 }
 
+/**
+ * 调和子节点
+ * @description 
+ * @return {*}
+ * @example  
+ */
 export function reconcileChildren(
   current: Fiber | null,
   workInProgress: Fiber,
   nextChildren: any,
   renderLanes: Lanes,
 ) {
-  if (current === null) {
+  if (current === null) { // 初始化子代 fiber
     // If this is a fresh new component that hasn't been rendered yet, we
     // won't update its child set by applying minimal side-effects. Instead,
     // we will add them all to the child before it gets rendered. That means
@@ -301,7 +307,7 @@ export function reconcileChildren(
       nextChildren,
       renderLanes,
     );
-  } else {
+  } else { // 更新流程，diff children 将在这里进行
     // If the current child is the same as the work in progress, it means that
     // we haven't yet started any work on these children. Therefore, we use
     // the clone algorithm to create a copy of all the current children.
@@ -3809,6 +3815,13 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
 /**
  * 当普通的 JSX 代码被 babel 编译成 React.createElement 的形式后，最终都会走到 beginWork
  * 可以说是 React 整个流程的开始
+ * @description 
+ * 作用：
+ * 1. 对于组件，执行生命周期，执行 render，得到最新的 children
+ * 2. 向下遍历调和 children（reconcileChildren），复用 oldFiber（diff 算法）
+ * 3. 打不同的副作用标签 effectTag，比如 类组件的 生命周期，或者元素的增删改
+ * @return {*}
+ * @example  
  */
 function beginWork(
   current: Fiber | null,
@@ -3907,8 +3920,9 @@ function beginWork(
 
   // 判断 element 对应的 fiber
   // Fiber 保存了什么，见 packages/react-reconciler/src/ReactFiber.new.js 中的 FiberNode
+  // 下面 return 的函数中会调用 reconcileChildren 调和子节点
   switch (workInProgress.tag) {
-    case IndeterminateComponent: {
+    case IndeterminateComponent: { // 初始化是不知道是函数组件还是类组件
       return mountIndeterminateComponent(
         current,
         workInProgress,
@@ -3925,7 +3939,7 @@ function beginWork(
         renderLanes,
       );
     }
-    case FunctionComponent: {
+    case FunctionComponent: { // 对应函数组件
       const Component = workInProgress.type;
       const unresolvedProps = workInProgress.pendingProps;
       const resolvedProps =
@@ -3940,7 +3954,7 @@ function beginWork(
         renderLanes,
       );
     }
-    case ClassComponent: {
+    case ClassComponent: { // 类组件
       const Component = workInProgress.type;
       const unresolvedProps = workInProgress.pendingProps;
       const resolvedProps =

@@ -38,6 +38,7 @@ export const TotalLanes = 31;
 export const NoLanes: Lanes = /*                        */ 0b0000000000000000000000000000000;
 export const NoLane: Lane = /*                          */ 0b0000000000000000000000000000000;
 
+/** 同步通道 1 */
 export const SyncLane: Lane = /*                        */ 0b0000000000000000000000000000001;
 
 export const InputContinuousHydrationLane: Lane = /*    */ 0b0000000000000000000000000000010;
@@ -131,7 +132,14 @@ export const NoTimestamp = -1;
 let nextTransitionLane: Lane = TransitionLane1;
 let nextRetryLane: Lane = RetryLane1;
 
+/**
+ * @description 从合并的优先级 lane 中分离出高优先级的任务
+ * @param {*} lanes
+ * @return {*}
+ * @example  
+ */
 function getHighestPriorityLanes(lanes: Lanes | Lane): Lanes {
+  // 通过 getHighestPriorityLane 分离出优先级高的任务
   switch (getHighestPriorityLane(lanes)) {
     case SyncLane:
       return SyncLane;

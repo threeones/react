@@ -357,7 +357,11 @@ export function commitBeforeMutationEffects(
 
   return shouldFire;
 }
-
+/**
+ * @description Before mutation 阶段（执行 DOM 操作前）
+ * @return {*}
+ * @example  
+ */
 function commitBeforeMutationEffects_begin() {
   while (nextEffect !== null) {
     const fiber = nextEffect;
@@ -721,6 +725,11 @@ export function commitPassiveEffectDurations(
   }
 }
 
+/**
+ * @description 对于类组件，会执行生命周期，setState 的 callback；对于函数组件，会执行 useLayoutEffect 钩子
+ * @return {*}
+ * @example  
+ */
 function commitLayoutEffectOnFiber(
   finishedRoot: FiberRoot,
   current: Fiber | null,
