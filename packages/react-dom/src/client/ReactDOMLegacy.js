@@ -200,11 +200,19 @@ function warnOnInvalidCallback(callback: mixed, callerName: string): void {
   }
 }
 
+/**
+ * @description ReactDOM.render 主要是形成一个 Fiber Tree 挂载到 app 上；本质上是 legacyRenderSubtreeIntoContainer 方法
+ * @return {*}
+ * @demo 
+ */
 function legacyRenderSubtreeIntoContainer(
   parentComponent: ?React$Component<any, any>,
+  /** App 根部组件 */
   children: ReactNodeList,
+  /** app dom 元素 */
   container: Container,
   forceHydrate: boolean,
+  /** ReactDOM.render 第三个参数回调函数 */
   callback: ?Function,
 ) {
   if (__DEV__) {
@@ -216,6 +224,7 @@ function legacyRenderSubtreeIntoContainer(
   let root: FiberRoot;
   if (!maybeRoot) {
     // Initial mount
+    // 创建 fiber Root
     root = legacyCreateRootFromDOMContainer(
       container,
       children,
@@ -225,6 +234,7 @@ function legacyRenderSubtreeIntoContainer(
     );
   } else {
     root = maybeRoot;
+    // 处理 callback 逻辑，可以省略不看
     if (typeof callback === 'function') {
       const originalCallback = callback;
       callback = function() {
@@ -233,6 +243,7 @@ function legacyRenderSubtreeIntoContainer(
       };
     }
     // Update
+    // 开始更新
     updateContainer(children, root, parentComponent, callback);
   }
   return getPublicRootInstance(root);

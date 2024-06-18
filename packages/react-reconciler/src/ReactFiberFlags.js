@@ -71,6 +71,7 @@ export const MountPassiveDev = /*              */ 0b10000000000000000000000000;
 // Groups of flags that are used in the commit phase to skip over trees that
 // don't contain effects, by checking subtreeFlags.
 
+/** beforeMutation 阶段标志 */
 export const BeforeMutationMask =
   // TODO: Remove Update flag from before mutation phase by re-landing Visibility
   // flag logic (see #20043)
@@ -84,6 +85,7 @@ export const BeforeMutationMask =
       ChildDeletion | Visibility
     : 0);
 
+/** mutation 阶段标志 */
 export const MutationMask =
   Placement |
   Update |
@@ -92,9 +94,11 @@ export const MutationMask =
   Ref |
   Hydrating |
   Visibility;
+/** layout 阶段标志 */
 export const LayoutMask = Update | Callback | Ref | Visibility;
 
 // TODO: Split into PassiveMountMask and PassiveUnmountMask
+/** useEffect 阶段标志 */
 export const PassiveMask = Passive | ChildDeletion;
 
 // Union of tags that don't get reset on clones.

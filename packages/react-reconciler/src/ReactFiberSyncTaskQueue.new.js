@@ -20,14 +20,23 @@ let syncQueue: Array<SchedulerCallback> | null = null;
 let includesLegacySyncCallbacks: boolean = false;
 let isFlushingSyncQueue: boolean = false;
 
+/**
+ * 调度任务
+ * @description 把任务同步更新到队列中（syncQueue）
+ * @param {*} callback
+ * @return {*}
+ * @demo 
+ */
 export function scheduleSyncCallback(callback: SchedulerCallback) {
   // Push this callback into an internal queue. We'll flush these either in
   // the next tick, or earlier if something calls `flushSyncCallbackQueue`.
   if (syncQueue === null) {
+    // 如果队列为空，放入调度任务
     syncQueue = [callback];
   } else {
     // Push onto existing queue. Don't need to schedule a callback because
     // we already scheduled one when we created the queue.
+    // 如果任务队列不为空，将任务放入队列
     syncQueue.push(callback);
   }
 }
@@ -43,6 +52,7 @@ export function flushSyncCallbacksOnlyInLegacyMode() {
   // it might make more sense for the queue to be a list of roots instead of a
   // list of generic callbacks. Then we can have two: one for legacy roots, one
   // for concurrent roots. And this method would only flush the legacy ones.
+  // 只有 legacy 模式才会走这里的流程
   if (includesLegacySyncCallbacks) {
     flushSyncCallbacks();
   }

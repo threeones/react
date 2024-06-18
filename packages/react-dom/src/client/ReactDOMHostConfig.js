@@ -393,6 +393,11 @@ const localPromise = typeof Promise === 'function' ? Promise : undefined;
 //     Microtasks
 // -------------------
 export const supportsMicrotasks = true;
+/**
+ * @description 本质是 Promise.resolve，并使用 setTimeout 向下兼容
+ * @return {*}
+ * @demo 
+ */
 export const scheduleMicrotask: any =
   typeof queueMicrotask === 'function'
     ? queueMicrotask
@@ -450,6 +455,11 @@ export function commitMount(
   }
 }
 
+/**
+ * @description 更新元素
+ * @return {*}
+ * @demo 
+ */
 export function commitUpdate(
   domElement: Instance,
   updatePayload: Array<mixed>,
@@ -459,6 +469,7 @@ export function commitUpdate(
   internalInstanceHandle: Object,
 ): void {
   // Apply the diff to the DOM node.
+  // 更新元素属性
   updateProperties(domElement, updatePayload, type, oldProps, newProps);
   // Update the props handle so that we know which props are the ones with
   // with current event handlers.

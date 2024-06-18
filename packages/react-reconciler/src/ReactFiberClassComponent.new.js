@@ -680,6 +680,7 @@ function constructClassInstance(
   }
 
   if (typeof contextType === 'object' && contextType !== null) {
+    // 读取 context，将 context 和 fiber 上的 dependencies 建立起关联
     context = readContext((contextType: any));
   } else if (!disableLegacyContext) {
     unmaskedContext = getUnmaskedContext(workInProgress, ctor, true);

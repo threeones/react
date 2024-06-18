@@ -510,6 +510,12 @@ function requestRetryLane(fiber: Fiber) {
   return claimNextRetryLane();
 }
 
+/**
+ * 当组件 state 或 props 变化时，调度组件更新
+ * @description 无论是初始化，还是更新（useState、setState），最后都是调用 scheduleUpdateOnFiber，这就是整个更新的入口
+ * @return {*}
+ * @demo 
+ */
 export function scheduleUpdateOnFiber(
   fiber: Fiber,
   lane: Lane,
@@ -517,6 +523,7 @@ export function scheduleUpdateOnFiber(
 ): FiberRoot | null {
   checkForNestedUpdates();
 
+  // 将更新标记向上递归到 Fiber 树的根节点
   const root = markUpdateLaneFromFiberToRoot(fiber, lane);
   if (root === null) {
     return null;
@@ -611,6 +618,7 @@ export function scheduleUpdateOnFiber(
       }
     }
 
+    // 如果 root 确定更新，就会执行 ensureRootIsScheduled
     ensureRootIsScheduled(root, eventTime);
     if (
       lane === SyncLane &&
@@ -625,6 +633,7 @@ export function scheduleUpdateOnFiber(
       // without immediately flushing it. We only do this for user-initiated
       // updates, to preserve historical behavior of legacy mode.
       resetRenderTimer();
+      // 执行 flushSyncCallbackQueue/flushSyncCallbacksOnlyInLegacyMode，立即执行更新
       flushSyncCallbacksOnlyInLegacyMode();
     }
   }
@@ -655,14 +664,24 @@ export function scheduleInitialHydrationOnRoot(
 // work without treating it as a typical update that originates from an event;
 // e.g. retrying a Suspense boundary isn't an update, but it does schedule work
 // on a fiber.
+/**
+ * 标记优先级
+ * @description 
+ * @param {*} sourceFiber 发生 state 变化的 fiber，比如组件 A 触发了 useState，那么组件 A 对应的 fiber 就是 sourceFiber
+ * @param {*} lane 产生的更新优先级
+ * @return {*}
+ * @demo 
+ */
 function markUpdateLaneFromFiberToRoot(
   sourceFiber: Fiber,
   lane: Lane,
 ): FiberRoot | null {
   // Update the source fiber's lanes
+  // 更新当前 fiber 上的更新优先级
   sourceFiber.lanes = mergeLanes(sourceFiber.lanes, lane);
   let alternate = sourceFiber.alternate;
   if (alternate !== null) {
+    // 更新缓冲树上的更新优先级
     alternate.lanes = mergeLanes(alternate.lanes, lane);
   }
   if (__DEV__) {
@@ -674,9 +693,12 @@ function markUpdateLaneFromFiberToRoot(
     }
   }
   // Walk the parent path to the root and update the child lanes.
+  // 当前更新的 fiber
   let node = sourceFiber;
+  // 找到返回父级
   let parent = sourceFiber.return;
   while (parent !== null) {
+    // 更新 childLanes
     parent.childLanes = mergeLanes(parent.childLanes, lane);
     alternate = parent.alternate;
     if (alternate !== null) {
@@ -688,8 +710,9 @@ function markUpdateLaneFromFiberToRoot(
         }
       }
     }
+    // 向上（向父级）递归遍历更新
     node = parent;
-    parent = parent.return;
+    parent = parent.return; // parent.return 指 parent 的父级
   }
   if (node.tag === HostRoot) {
     const root: FiberRoot = node.stateNode;
@@ -721,7 +744,8 @@ export function isInterleavedUpdate(fiber: Fiber, lane: Lane) {
 // root has work on. This function is called on every update, and right before
 // exiting a task.
 /**
- * React 发生更新会统一走 ensureRootIsScheduled（调度应用）
+ * 确保 Fiber 树的根节点被调度
+ * React 发生更新（setState 和 useState）会统一走 ensureRootIsScheduled（调度应用）
  * @description 正常更新会走 performSyncWorkOnRoot > workLoopSync
  * 低优先级的异步更新会走 performConcurrentWorkOnRoot > workLoopConcurrent
  * 见 react-reconciler/src/ReactFiberWorkLoop.js 的 workLoopSync 和 workLoopConcurrent
@@ -755,10 +779,13 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
 
   // We use the highest priority lane to represent the priority of the callback.
   // 回调优先级
+  // 计算一下执行更新的优先级
   const newCallbackPriority = getHighestPriorityLane(nextLanes);
 
   // Check if there's an existing task. We may be able to reuse it.
+  // 当前 root 上存在的更新优先级
   const existingCallbackPriority = root.callbackPriority;
+  // 如果两者相等，说明是在一次更新中，退出
   if (
     existingCallbackPriority === newCallbackPriority &&
     // Special case related to `act`. If the currently scheduled task is a
@@ -784,6 +811,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
       }
     }
     // The priority hasn't changed. We can reuse the existing task. Exit.
+    // 批量更新退出
     return;
   }
 
@@ -794,6 +822,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
 
   // Schedule a new callback.
   let newCallbackNode;
+  // 同步更新条件下，走这里的逻辑
   if (newCallbackPriority === SyncLane) { // 正常更新：performSyncWorkOnRoot > workLoopSync
     // Special case: Sync React callbacks are scheduled on a special
     // internal queue
@@ -803,6 +832,8 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
       }
       scheduleLegacySyncCallback(performSyncWorkOnRoot.bind(null, root));
     } else {
+      // 正常情况下，直接进入到调度任务中
+      // 放入调度中的函数 performSyncWorkOnRoot 是调和流程的入口函数
       scheduleSyncCallback(performSyncWorkOnRoot.bind(null, root));
     }
     if (supportsMicrotasks) {
@@ -813,6 +844,7 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
         // of `act`.
         ReactCurrentActQueue.current.push(flushSyncCallbacks);
       } else {
+        // 用微任务去立即执行更新，见 packages/react-dom/src/client/ReactDOMHostConfig.js 的 scheduleMicrotask
         scheduleMicrotask(() => {
           // In Safari, appending an iframe forces microtasks to run.
           // https://github.com/facebook/react/issues/22459
@@ -851,12 +883,14 @@ function ensureRootIsScheduled(root: FiberRoot, currentTime: number) {
         break;
     }
     // 类似 scheduleCallback(priorityLevel, workLoopConcurrent)
+    // 异步直接执行 scheduleCallback 得到 newCallbackNode，并赋值给 root
     newCallbackNode = scheduleCallback(
       schedulerPriorityLevel,
       performConcurrentWorkOnRoot.bind(null, root),
     );
   }
 
+  // 给当前 root 的更新优先级，绑定到最新的更新优先级
   root.callbackPriority = newCallbackPriority;
   root.callbackNode = newCallbackNode;
 }
@@ -1237,6 +1271,13 @@ function markRootSuspended(root, suspendedLanes) {
 
 // This is the entry point for synchronous tasks that don't go
 // through Scheduler
+/**
+ * legacy sync 模式下的更新任务
+ * @description 
+ * @param {*} root
+ * @return {*}
+ * @demo 
+ */
 function performSyncWorkOnRoot(root) {
   if (enableProfilerTimer && enableProfilerNestedUpdatePhase) {
     syncNestedUpdateFlag();
@@ -1255,6 +1296,7 @@ function performSyncWorkOnRoot(root) {
     return null;
   }
 
+  // render 阶段
   let exitStatus = renderRootSync(root, lanes);
   if (root.tag !== LegacyRoot && exitStatus === RootErrored) {
     // If something threw an error, try rendering one more time. We'll render
@@ -1285,10 +1327,12 @@ function performSyncWorkOnRoot(root) {
   const finishedWork: Fiber = (root.current.alternate: any);
   root.finishedWork = finishedWork;
   root.finishedLanes = lanes;
+  // commit 阶段
   commitRoot(root, workInProgressRootRecoverableErrors);
 
   // Before exiting, make sure there's a callback scheduled for the next
   // pending level.
+  // 如果有其他的等待中的任务，那么继续更新
   ensureRootIsScheduled(root, now());
 
   return null;
@@ -1324,11 +1368,13 @@ export function deferredUpdates<A>(fn: () => A): A {
 }
 
 export function batchedUpdates<A, R>(fn: A => R, a: A): R {
+  // 批量更新流程，没有更新状态下，直接执行任务
   const prevExecutionContext = executionContext;
-  executionContext |= BatchedContext;
+  executionContext |= BatchedContext; // 运算赋值
   try {
-    return fn(a);
+    return fn(a); // 执行事件本身，react 事件在这里执行，useState 和 setState 也会在这里执行
   } finally {
+    // 重置状态
     executionContext = prevExecutionContext;
     // If there were legacy sync updates, flush them at the end of the outer
     // most batchedUpdates-like method.
@@ -1338,7 +1384,9 @@ export function batchedUpdates<A, R>(fn: A => R, a: A): R {
       !(__DEV__ && ReactCurrentActQueue.isBatchingLegacy)
     ) {
       resetRenderTimer();
-      flushSyncCallbacksOnlyInLegacyMode();
+      // 旧版本是 flushSyncCallbackQueue
+      // 批量更新流程，没有更新状态下，直接执行任务
+      flushSyncCallbacksOnlyInLegacyMode(); // 同步执行更新队列中的任务，针对 legacy 模式的更新，concurrent 模式下不走这个逻辑
     }
   }
 }
@@ -1667,6 +1715,14 @@ export function renderHasNotSuspendedYet(): boolean {
   return workInProgressRootExitStatus === RootInProgress;
 }
 
+/**
+ * render 阶段
+ * @description 
+ * @param {*} root
+ * @param {*} lanes
+ * @return {*}
+ * @demo 
+ */
 function renderRootSync(root: FiberRoot, lanes: Lanes) {
   const prevExecutionContext = executionContext;
   executionContext |= RenderContext;
@@ -1737,6 +1793,7 @@ function renderRootSync(root: FiberRoot, lanes: Lanes) {
   }
 
   // Set this to null to indicate there's no in-progress render.
+  // workLoop 完毕后，证明所有节点遍历完毕，那么重置状态，进入 commit 阶段
   workInProgressRoot = null;
   workInProgressRootRenderLanes = NoLanes;
 
@@ -1991,7 +2048,11 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
 
 /**
  * commit 阶段的入口
- * 首先会制定函数的优先级，当执行完毕后，恢复优先级，函数主体为 commitRootImpl
+ * @description 首先会制定函数的优先级，当执行完毕后，恢复优先级，函数主体为 commitRootImpl
+ * @param {*} root
+ * @param {*} recoverableErrors
+ * @return {*}
+ * @demo 
  */
 function commitRoot(root: FiberRoot, recoverableErrors: null | Array<mixed>) {
   // TODO: This no longer makes any sense. We already wrap the mutation and
@@ -2014,8 +2075,10 @@ function commitRoot(root: FiberRoot, recoverableErrors: null | Array<mixed>) {
 }
 
 /**
- * commit 函数主体
- * 只需要关注 effect 的逻辑即可，主要是 scheduleCallback
+ * commit 函数主体；commit 的主要执行函数
+ * @description 只需要关注 effect 的逻辑即可，主要是 scheduleCallback
+ * @return {*}
+ * @demo 
  */
 function commitRootImpl(
   root: FiberRoot,
@@ -2117,6 +2180,7 @@ function commitRootImpl(
       pendingPassiveEffectsRemainingLanes = remainingLanes;
       // effect 的主要逻辑，关注这里
       // NormalSchedulerPriority：effectlist 是普通优先级
+      // 通过异步的方式处理 useEffect
       scheduleCallback(NormalSchedulerPriority, () => {
         // 调度 Effect
         flushPassiveEffects();
@@ -2943,6 +3007,9 @@ function warnAboutUpdateOnNotYetMountedFiberInDEV(fiber) {
 /**
  * @description 向下调和的过程：由 fiberRoot 按照 child 指针逐层向下调和，期间会指向函数组件、实例类组件，diff 调和子组件，打不同的 effectTag（副作用标签）
  * 详细见 packages/react-reconciler/src/ReactFiberBeginWork.new.js 的 beginWork
+ * @param {*} current current 树 fiber
+ * @param {*} unitOfWork workInProgress 树 fiber
+ * @param {*} lanes 当前的 render 优先级
  * @return {*}
  * @example  
  */

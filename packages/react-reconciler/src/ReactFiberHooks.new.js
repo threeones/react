@@ -1216,12 +1216,14 @@ function useMutableSource<Source, Snapshot>(
     );
   }
 
+  // 获取版本号
   const getVersion = source._getVersion;
   const version = getVersion(source._source);
 
   const dispatcher = ReactCurrentDispatcher.current;
 
   // eslint-disable-next-line prefer-const
+  // 用 useState 保存当前 Snapshot，触发更新
   let [currentSnapshot, setSnapshot] = dispatcher.useState(() =>
     readFromUnsubscribedMutableSource(root, source, getSnapshot),
   );
@@ -1291,6 +1293,7 @@ function useMutableSource<Source, Snapshot>(
       const latestSetSnapshot = refs.setSnapshot;
 
       try {
+        // 触发更新
         latestSetSnapshot(latestGetSnapshot(source._source));
 
         // Record a pending mutable source update with the same expiration time.
@@ -1302,6 +1305,7 @@ function useMutableSource<Source, Snapshot>(
         // e.g. it might try to read from a part of the store that no longer exists.
         // In this case we should still schedule an update with React.
         // Worst case the selector will throw again and then an error boundary will handle it.
+        // 触发更新
         latestSetSnapshot(
           (() => {
             throw error;
@@ -1480,7 +1484,9 @@ function mountSyncExternalStore<T>(
   // normal rules of React, and only works because store updates are
   // always synchronous.
   // 将 store 的状态值存储到对应的 memoizedState
+  // 把快站记录下来
   hook.memoizedState = nextSnapshot;
+  // 快照记录在 inst 属性上
   const inst: StoreInstance<T> = {
     value: nextSnapshot,
     getSnapshot,
@@ -1491,6 +1497,7 @@ function mountSyncExternalStore<T>(
   // useEffect 中的 mountEffect
   // mountEffect 和 pushEffect，与 useEffect 的初始化步骤对应：打上标记，在 commit 阶段进行一致性检查，防止 store 的状态不一致
   // 核心
+  // 用一个 effect 来订阅状态，subscribeToStore 发起订阅
   mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [subscribe]);
 
   // Schedule an effect to update the mutable instance fields. We will update
@@ -1502,6 +1509,7 @@ function mountSyncExternalStore<T>(
   // consistency check. See the next comment.
   fiber.flags |= PassiveEffect;
   // 打上对应的标记，与 useEffect 中一样
+  // 用一个 useEffect 来监听组件 render，只要组件渲染就会调用 updateStoreInstance
   pushEffect(
     HookHasEffect | HookPassive,
     // 核心
@@ -1631,8 +1639,8 @@ function pushStoreConsistencyCheck<T>(
 }
 
 /**
- * 在 commit 阶段，统一处理 fiber 阶段的所有 effect，此时再检查 store 是否发生变化，防止 store 的状态不一致
- * @description 
+ * 判断 state 是否发生变化，如果变化则更新
+ * @description 在 commit 阶段，统一处理 fiber 阶段的所有 effect，此时再检查 store 是否发生变化，防止 store 的状态不一致
  * @return {*}
  * @example  
  */
@@ -1672,12 +1680,15 @@ function subscribeToStore(fiber, inst, subscribe) {
   const handleStoreChange = () => {
     // The store changed. Check if the snapshot changed since the last time we
     // read from the store.
+    // 检查 state 是否发生变化
     if (checkIfSnapshotChanged(inst)) {
       // Force a re-render.
+      // 触发更新
       forceStoreRerender(fiber);
     }
   };
   // Subscribe to the store and return a clean-up function.
+  // 发起订阅
   return subscribe(handleStoreChange);
 }
 

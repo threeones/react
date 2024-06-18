@@ -260,6 +260,7 @@ import {
 
 const ReactCurrentOwner = ReactSharedInternals.ReactCurrentOwner;
 
+/** 证明当前更新是否来源于父级的更新（即自身没有更新） */
 let didReceiveUpdate: boolean = false;
 
 let didWarnAboutBadClass;
@@ -3352,6 +3353,7 @@ function updateContextProvider(
     }
   }
 
+  // 获取 Provider 上的 value
   pushProvider(workInProgress, context, newValue);
 
   if (enableLazyContextPropagation) {
@@ -3360,14 +3362,17 @@ function updateContextProvider(
     // we're going to visit those nodes, anyway. The trade-off is that it shifts
     // responsibility to the consumer to track whether something has changed.
   } else {
+    // 更新 context
     if (oldProps !== null) {
       const oldValue = oldProps.value;
       if (is(oldValue, newValue)) {
         // No change. Bailout early if children are the same.
+        // context 没有变化，如果 children 一样，不需要更新
         if (
           oldProps.children === newProps.children &&
           !hasLegacyContextChanged()
         ) {
+          // 停止调和子节点，收尾工作
           return bailoutOnAlreadyFinishedWork(
             current,
             workInProgress,
@@ -3377,12 +3382,14 @@ function updateContextProvider(
       } else {
         // The context value changed. Search for matching consumers and schedule
         // them to update.
+        // context 改变，更新 context
         propagateContextChange(workInProgress, context, renderLanes);
       }
     }
   }
 
   const newChildren = newProps.children;
+  // 继续向下调和子代 fiber
   reconcileChildren(current, workInProgress, newChildren, renderLanes);
   return workInProgress.child;
 }
@@ -3421,6 +3428,7 @@ function updateContextConsumer(
     }
   }
   const newProps = workInProgress.pendingProps;
+  // 得到 render props children
   const render = newProps.children;
 
   if (__DEV__) {
@@ -3434,7 +3442,9 @@ function updateContextConsumer(
     }
   }
 
+  // 读取 context
   prepareToReadContext(workInProgress, renderLanes);
+  // 得到最新的 context value
   const newValue = readContext(context);
   if (enableSchedulingProfiler) {
     markComponentRenderStarted(workInProgress);
@@ -3443,9 +3453,11 @@ function updateContextConsumer(
   if (__DEV__) {
     ReactCurrentOwner.current = workInProgress;
     setIsRendering(true);
+    // 得到最新的 children element
     newChildren = render(newValue);
     setIsRendering(false);
   } else {
+    // 得到最新的 children element
     newChildren = render(newValue);
   }
   if (enableSchedulingProfiler) {
@@ -3454,6 +3466,7 @@ function updateContextConsumer(
 
   // React DevTools reads this flag.
   workInProgress.flags |= PerformedWork;
+  // 调和 children
   reconcileChildren(current, workInProgress, newChildren, renderLanes);
   return workInProgress.child;
 }
@@ -3474,6 +3487,13 @@ export function checkIfWorkInProgressReceivedUpdate() {
   return didReceiveUpdate;
 }
 
+/**
+ * @description 
+ * 1. 通过 includesSomeLane 判断 childLanes 是否高优先级任务：如果不是，那么所有子孙 fiber 都不需要调和，返回 null
+ * 2. 如果 childLanes 优先级高，那么证明 child 需要被调和，但是当前组件不需要，所以克隆一下 children，返回 children，本身不会 rerender
+ * @return {*}
+ * @demo 
+ */
 function bailoutOnAlreadyFinishedWork(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -3501,6 +3521,7 @@ function bailoutOnAlreadyFinishedWork(
       // Before bailing out, check if there are any context changes in
       // the children.
       lazilyPropagateParentContextChanges(current, workInProgress, renderLanes);
+      // 如果 children 没有高优先级的任务，说明所有的 child 都没有更新，那么直接返回，child 也不会被调和
       if (!includesSomeLane(renderLanes, workInProgress.childLanes)) {
         return null;
       }
@@ -3511,6 +3532,7 @@ function bailoutOnAlreadyFinishedWork(
 
   // This fiber doesn't have work, but its subtree does. Clone the child
   // fibers and continue.
+  // 当前 fiber 没有更新，但是它的 children 需要更新
   cloneChildFibers(current, workInProgress);
   return workInProgress.child;
 }
@@ -3579,6 +3601,12 @@ function remountFiber(
   }
 }
 
+/**
+ * 检查更新来自自身或者 context 改变
+ * @description 
+ * @return {*}
+ * @demo 
+ */
 function checkScheduledUpdateOrContext(
   current: Fiber,
   renderLanes: Lanes,
@@ -3586,11 +3614,13 @@ function checkScheduledUpdateOrContext(
   // Before performing an early bailout, we must check if there are pending
   // updates or context.
   const updateLanes = current.lanes;
-  if (includesSomeLane(updateLanes, renderLanes)) {
+  // 检查当前 fiber 的 lane 是否等于当前的更新优先级，如果相等，说明更新来源于当前 fiber
+  if (includesSomeLane(updateLanes, renderLanes)) { // 说明当前组件更新
     return true;
   }
   // No pending update, but because context is propagated lazily, we need
   // to check for a context change before we bail out.
+  // 如果该 fiber 消费了 context，并且 context 改变
   if (enableLazyContextPropagation) {
     const dependencies = current.dependencies;
     if (dependencies !== null && checkIfContextChanged(dependencies)) {
@@ -3820,6 +3850,9 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
  * 1. 对于组件，执行生命周期，执行 render，得到最新的 children
  * 2. 向下遍历调和 children（reconcileChildren），复用 oldFiber（diff 算法）
  * 3. 打不同的副作用标签 effectTag，比如 类组件的 生命周期，或者元素的增删改
+ * @param {*} current current 树 fiber
+ * @param {*} unitOfWork workInProgress 树 fiber
+ * @param {*} lanes 当前的 render 优先级
  * @return {*}
  * @example  
  */
@@ -3846,10 +3879,23 @@ function beginWork(
     }
   }
 
+  /* 第一部分 */
+  // 判断当前 fiber 是否创建过：第一次 mounted 时，current 为 null；如果是更新，则不为 null
   if (current !== null) {
+    /* 更新流程 */
+    // current 树上，上一次渲染后的 props
     const oldProps = current.memoizedProps;
+    // workInProgress 树上，这一次更新的 props
     const newProps = workInProgress.pendingProps;
 
+    /**
+     * oldProps === newProps 的情况
+     * 1. 子组件更新，当前组件被标记 childLanes 进入 beginWork 调和阶段，但是组件的 props 并没有变化
+     * 2. useMemo 等方式缓存了 React element 元素
+     * 3. 更新发生在组件本身，此时组件的 props 并没有变化
+     * 
+     * 如果两者不相等，说明 组件的父级 fiber 重新 rerender 导致了 props 改变
+     */
     if (
       oldProps !== newProps ||
       hasLegacyContextChanged() ||
@@ -3862,6 +3908,7 @@ function beginWork(
     } else {
       // Neither props nor legacy context changes. Check if there's a pending
       // update or context change.
+      // props 和 context 没有发生变化，检查更新是否来自自身或 context 改变
       const hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(
         current,
         renderLanes,
@@ -3874,6 +3921,7 @@ function beginWork(
       ) {
         // No pending updates or context. Bail out now.
         didReceiveUpdate = false;
+        // 处理部分 context 逻辑，重点是调用了 bailoutOnAlreadyFinishedWork
         return attemptEarlyBailoutIfNoScheduledUpdate(
           current,
           workInProgress,
@@ -3918,6 +3966,7 @@ function beginWork(
   // move this assignment out of the common path and into each branch.
   workInProgress.lanes = NoLanes;
 
+  /* 第二部分 */
   // 判断 element 对应的 fiber
   // Fiber 保存了什么，见 packages/react-reconciler/src/ReactFiber.new.js 中的 FiberNode
   // 下面 return 的函数中会调用 reconcileChildren 调和子节点

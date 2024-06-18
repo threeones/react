@@ -357,12 +357,16 @@ function updateDOMProperties(
     const propKey = updatePayload[i];
     const propValue = updatePayload[i + 1];
     if (propKey === STYLE) {
+      // 更新 style 信息
       setValueForStyles(domElement, propValue);
     } else if (propKey === DANGEROUSLY_SET_INNER_HTML) {
+      // 更新 innerHtml
       setInnerHTML(domElement, propValue);
     } else if (propKey === CHILDREN) {
+      // 更新 nodeValue 信息
       setTextContent(domElement, propValue);
     } else {
+      // 更新元素的 props
       setValueForProperty(domElement, propKey, propValue, isCustomComponentTag);
     }
   }
@@ -824,6 +828,7 @@ export function updateProperties(
   const wasCustomComponentTag = isCustomComponent(tag, lastRawProps);
   const isCustomComponentTag = isCustomComponent(tag, nextRawProps);
   // Apply the diff.
+  // 更新 DOM 元素属性
   updateDOMProperties(
     domElement,
     updatePayload,

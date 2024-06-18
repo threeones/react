@@ -15,13 +15,15 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
   // TODO: Second argument used to be an optional `calculateChangedBits`
   // function. Warn to reserve for future use?
 
+  // context 对象本质
   const context: ReactContext<T> = {
-    $$typeof: REACT_CONTEXT_TYPE,
+    $$typeof: REACT_CONTEXT_TYPE, // 本质上就是 Consumer element 类型
     // As a workaround to support multiple concurrent renderers, we categorize
     // some renderers as primary and others as secondary. We only expect
     // there to be two concurrent renderers at most: React Native (primary) and
     // Fabric (secondary); React DOM (primary) and React ART (secondary).
     // Secondary renderers store their context values on separate fields.
+    // 用来保存传递给 Provier 的 value
     _currentValue: defaultValue,
     _currentValue2: defaultValue,
     // Used to track how many concurrent renderers this context currently
@@ -36,6 +38,7 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
     _globalName: (null: any),
   };
 
+  // 本质上就是 Provider element 类型
   context.Provider = {
     $$typeof: REACT_PROVIDER_TYPE,
     _context: context,

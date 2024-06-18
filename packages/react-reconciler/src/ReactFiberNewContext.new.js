@@ -196,6 +196,14 @@ export function scheduleContextWorkOnParentPath(
   }
 }
 
+/**
+ * @description 深度遍历所有子代 fiber，然后找到里面有 dependencies 属性，对比 dependencies 中的 context 和当前 Provider 是否同一个：
+ * 如果是同一个，如果当前 fiber 是类组件，绑定 forceUpodate 标识；
+ * 然后提高 fiber 更新优先级，让 fiber 在调和过程中，处于一个高优先级待更新的状态；
+ * 找到当前 fiber 向上的父级链的 fiber，统一更新他们的优先级，使其变成高优先级待更新状态
+ * @return {*}
+ * @example  
+ */
 export function propagateContextChange<T>(
   workInProgress: Fiber,
   context: ReactContext<T>,
@@ -244,9 +252,11 @@ function propagateContextChange_eager<T>(
         // Check if the context matches.
         if (dependency.context === context) {
           // Match! Schedule an update on this fiber.
+          // 类组件：不受 PureComponent 和 shouldComponentUpdate 影响
           if (fiber.tag === ClassComponent) {
             // Schedule a force update on the work-in-progress.
             const lane = pickArbitraryLane(renderLanes);
+            // 会走 forceUpdate 咯几
             const update = createUpdate(NoTimestamp, lane);
             update.tag = ForceUpdate;
             // TODO: Because we don't have a work-in-progress, this will add the
@@ -656,6 +666,17 @@ export function prepareToReadContext(
   }
 }
 
+/**
+ * 读取 context
+ * @description 
+ * 1. 创建 contextItem
+ * 2. fiber 存在多个 dependencies，它们以链表的形式联系到一起
+ * 3. 如果不存在 lastContextDependency，说明 dependencies 为空，那么新建第一个 dependency
+ * 4. 如果存在，那么将 contextItem 以链表的形式追加到上一个 dependency.next 上，即 lastContextDependency.next = contextItem；
+ *    并且将当前的 contextItem 设置为最后一个 dependency，即 lastContextDependency = contextItem
+ * @return {*}
+ * @example  
+ */
 export function readContext<T>(context: ReactContext<T>): T {
   if (__DEV__) {
     // This warning would fire if you read context inside a Hook like useMemo.
@@ -677,12 +698,14 @@ export function readContext<T>(context: ReactContext<T>): T {
   if (lastFullyObservedContext === context) {
     // Nothing to do. We already observe everything in this context.
   } else {
+    // 创建一个 contextItem
     const contextItem = {
       context: ((context: any): ReactContext<mixed>),
       memoizedValue: value,
       next: null,
     };
 
+    // 不存在最后一个 context Dependency
     if (lastContextDependency === null) {
       if (currentlyRenderingFiber === null) {
         throw new Error(
@@ -704,6 +727,7 @@ export function readContext<T>(context: ReactContext<T>): T {
       }
     } else {
       // Append a new context item.
+      // 存在的情况
       lastContextDependency = lastContextDependency.next = contextItem;
     }
   }

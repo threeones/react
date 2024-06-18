@@ -328,6 +328,7 @@ export function updateContainer(
   }
   const current = container.current;
   const eventTime = requestEventTime();
+  // 计算更新优先级
   const lane = requestUpdateLane(current);
 
   if (enableSchedulingProfiler) {
@@ -358,6 +359,7 @@ export function updateContainer(
     }
   }
 
+  // 创建一个 update
   const update = createUpdate(eventTime, lane);
   // Caution: React DevTools currently depends on this property
   // being called "element".
@@ -377,7 +379,9 @@ export function updateContainer(
     update.callback = callback;
   }
 
+  // 通过 enqueueUpdate 把当前 update 放入到待更新队列 updateQueue
   enqueueUpdate(current, update, lane);
+  // 开始调度更新
   const root = scheduleUpdateOnFiber(current, lane, eventTime);
   if (root !== null) {
     entangleTransitions(root, current, lane);
